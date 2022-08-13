@@ -1,4 +1,4 @@
-package runtime
+package runtime_test
 
 import (
 	"encoding/json"
@@ -7,30 +7,31 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pckhoi/uma-codegen/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type handler struct {
-	m             Middleware
-	onUMAResource func(r *UMAResource)
+	m             runtime.Middleware
+	onUMAResource func(r *runtime.UMAResource)
 }
 
 func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	h.m(func(rw http.ResponseWriter, req *http.Request) {
-		h.onUMAResource(GetUMAResource(req))
-	})(rw, req)
+	h.m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.onUMAResource(runtime.GetUMAResource(r))
+	})).ServeHTTP(rw, req)
 }
 
 func TestMiddleware(t *testing.T) {
-	var resource *UMAResource
+	var resource *runtime.UMAResource
 	h := &handler{
-		onUMAResource: func(r *UMAResource) {
+		onUMAResource: func(r *runtime.UMAResource) {
 			resource = r
 		},
 	}
 	s := httptest.NewServer(h)
-	types := map[string]UMAResourceType{
+	types := map[string]runtime.UMAResourceType{
 		"user": {
 			Type:           "user",
 			Description:    "A user",
@@ -44,7 +45,7 @@ func TestMiddleware(t *testing.T) {
 			ResourceScopes: []string{"list"},
 		},
 	}
-	h.m = UMAResouceMiddleware(
+	h.m = runtime.UMAResouceMiddleware(
 		s.URL+"/base",
 		types,
 		map[string]string{
@@ -63,14 +64,14 @@ func TestMiddleware(t *testing.T) {
 
 	_, err = http.Get(s.URL + "/base/users")
 	require.NoError(t, err)
-	assert.Equal(t, &UMAResource{
+	assert.Equal(t, &runtime.UMAResource{
 		UMAResourceType: types["users"],
 		Name:            s.URL + "/base/users",
 	}, resource)
 
 	_, err = http.Get(s.URL + "/base/users/123")
 	require.NoError(t, err)
-	assert.Equal(t, &UMAResource{
+	assert.Equal(t, &runtime.UMAResource{
 		UMAResourceType: types["user"],
 		Name:            s.URL + "/base/users/123",
 	}, resource)

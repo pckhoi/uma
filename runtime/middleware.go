@@ -152,7 +152,7 @@ func (m *resourceMatcher) match(req *http.Request) *http.Request {
 }
 
 // Middleware is just a plain http middleware
-type Middleware func(next http.HandlerFunc) http.HandlerFunc
+type Middleware func(next http.Handler) http.Handler
 
 // UMAResouceMiddleware detects UMAResource by matching request path with paths. types is the map between
 // resource type and UMAResourceType. paths is the map between path template and resouce type as defined
@@ -162,10 +162,10 @@ func UMAResouceMiddleware(baseURL string, types map[string]UMAResourceType, path
 	if err != nil {
 		panic(err)
 	}
-	return func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r = m.match(r)
-			next(w, r)
-		}
+			next.ServeHTTP(w, r)
+		})
 	}
 }
