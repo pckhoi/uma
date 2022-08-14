@@ -69,7 +69,7 @@ func TestRenderMiddlewareCode(t *testing.T) {
 		``,
 		`// UMAResourceMiddleware detects uma.Resource to be used in subsequent requests`,
 		`func UMAResourceMiddleware(getBaseURL uma.BaseURLGetter) func(next http.Handler) http.Handler {`,
-		`	return runtime.UMAResouceMiddleware(getBaseURL, umaResourceTypes, resourceTemplates)`,
+		`	return uma.UMAResouceMiddleware(getBaseURL, umaResourceTypes, resourceTemplates)`,
 		`}`,
 		``,
 	}, "\n"), buf.String())
