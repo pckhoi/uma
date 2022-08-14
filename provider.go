@@ -57,23 +57,30 @@ func getProvider(r *http.Request) Provider {
 	return nil
 }
 
-type baseProvider struct {
-	Issuer              string
-	ClientID            string
-	ClientSecret        string
-	KeySet              KeySet
-	UMADiscovery        UMADiscovery
-	ClientCreds         *ClientCreds
-	registeredResources map[string]string
+type ResourceStore interface {
+	Set(name, id string)
+	Get(name string) (id string)
 }
 
-func newBaseProvider(issuer, clientID, clientSecret string, keySet KeySet) *baseProvider {
+type baseProvider struct {
+	Issuer        string
+	ClientID      string
+	ClientSecret  string
+	KeySet        KeySet
+	UMADiscovery  UMADiscovery
+	ClientCreds   *ClientCreds
+	resourceStore ResourceStore
+	client        *http.Client
+}
+
+func newBaseProvider(issuer, clientID, clientSecret string, keySet KeySet, resourceStore ResourceStore, client *http.Client) *baseProvider {
 	return &baseProvider{
-		Issuer:              issuer,
-		ClientID:            clientID,
-		ClientSecret:        clientSecret,
-		KeySet:              keySet,
-		registeredResources: map[string]string{},
+		Issuer:        issuer,
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		KeySet:        keySet,
+		resourceStore: resourceStore,
+		client:        client,
 	}
 }
 
@@ -82,14 +89,14 @@ func (p *baseProvider) VerifySignature(ctx context.Context, jwt string) (payload
 }
 
 func (p *baseProvider) registerResource(resource *Resource, register func() (resourceID string, err error)) (resourceID string, err error) {
-	if s, ok := p.registeredResources[resource.Name]; ok {
+	if s := p.resourceStore.Get(resource.Name); s != "" {
 		return s, nil
 	}
 	resourceID, err = register()
 	if err != nil {
 		return "", err
 	}
-	p.registeredResources[resource.Name] = resourceID
+	p.resourceStore.Set(resource.Name, resourceID)
 	return resourceID, nil
 }
 

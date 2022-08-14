@@ -33,13 +33,13 @@ func ensure2XX(resp *http.Response) error {
 	return nil
 }
 
-func postFormUrlencoded(url string, values url.Values) (*http.Response, error) {
+func (p *baseProvider) postFormUrlencoded(url string, values url.Values) (*http.Response, error) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader([]byte(values.Encode())))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
 	}

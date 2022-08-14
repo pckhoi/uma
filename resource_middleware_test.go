@@ -5,12 +5,14 @@ import (
 	"embed"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/dnaeon/go-vcr/v2/recorder"
 	"github.com/pckhoi/uma"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +44,29 @@ func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	})).ServeHTTP(rw, req)
 }
 
+type mockResourceStore map[string]string
+
+func (s mockResourceStore) Set(name, id string) {
+	s[name] = id
+}
+
+func (s mockResourceStore) Get(name string) string {
+	id, ok := s[name]
+	if !ok {
+		return ""
+	}
+	return id
+}
+
 func TestResourceMiddleware(t *testing.T) {
+	r, err := recorder.New("fixtures/keycloak")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer r.Stop() // Make sure recorder is stopped once done with it
+	client := &http.Client{}
+	*client = *http.DefaultClient
+	client.Transport = r
 	var resource *uma.Resource
 	h := &handler{
 		onUMAResource: func(r *uma.Resource) {
@@ -53,36 +77,36 @@ func TestResourceMiddleware(t *testing.T) {
 	types := map[string]uma.ResourceType{
 		"user": {
 			Type:           "user",
-			Description:    "A user",
 			IconUri:        "https://example.com/rsrcs/user.png",
 			ResourceScopes: []string{"read", "write"},
 		},
 		"users": {
 			Type:           "users",
-			Description:    "A list of users",
 			IconUri:        "https://example.com/rsrcs/users.png",
 			ResourceScopes: []string{"list"},
 		},
 	}
-	h.m = uma.ResourceMiddleware(
-		func(r *http.Request) url.URL {
+	h.m = uma.ResourceMiddleware(uma.ResourceMiddlewareOptions{
+		GetBaseURL: func(r *http.Request) url.URL {
 			u, _ := url.Parse(s.URL + "/base")
 			return *u
 		},
-		func(r *http.Request) uma.ProviderInfo {
+		GetProviderInfo: func(r *http.Request) uma.ProviderInfo {
 			pi := &uma.ProviderInfo{}
 			readFixture(t, "provider-info.json", pi)
 			pi.KeySet = oidc.NewRemoteKeySet(context.Background(), pi.Issuer+"/protocol/openid-connect/certs")
 			return *pi
 		},
-		types,
-		uma.ResourceTemplates{
+		ResourceStore: make(mockResourceStore),
+		Types:         types,
+		ResourceTemplates: uma.ResourceTemplates{
 			uma.NewResourceTemplate("/users", "users", "Users"),
 			uma.NewResourceTemplate("/users/{id}", "user", "User {id}"),
 		},
-	)
+		Client: client,
+	})
 
-	_, err := http.Get(s.URL + "/abc")
+	_, err = http.Get(s.URL + "/abc")
 	require.NoError(t, err)
 	assert.Nil(t, resource)
 
@@ -96,7 +120,8 @@ func TestResourceMiddleware(t *testing.T) {
 	id1 := resource.ID
 	assert.Equal(t, &uma.Resource{
 		ResourceType: types["users"],
-		Name:         s.URL + "/base/users",
+		Name:         "Users",
+		URI:          s.URL + "/base/users",
 		ID:           id1,
 	}, resource)
 
@@ -107,7 +132,8 @@ func TestResourceMiddleware(t *testing.T) {
 	assert.NotEqual(t, id2, id1)
 	assert.Equal(t, &uma.Resource{
 		ResourceType: types["user"],
-		Name:         s.URL + "/base/users/123",
+		Name:         "User 123",
+		URI:          s.URL + "/base/users/123",
 		ID:           id2,
 	}, resource)
 }

@@ -11,6 +11,8 @@ type middleware struct {
 	rm              *resourceMatcher
 	getProviderInfo ProviderInfoGetter
 	providers       map[string]Provider
+	resourceStore   ResourceStore
+	client          *http.Client
 }
 
 func (m *middleware) getProvider(r *http.Request) (*http.Request, Provider) {
@@ -22,7 +24,7 @@ func (m *middleware) getProvider(r *http.Request) (*http.Request, Provider) {
 	switch pinfo.Type {
 	case Keycloak:
 		p = &keycloakProvider{
-			baseProvider: newBaseProvider(pinfo.Issuer, pinfo.ClientID, pinfo.ClientSecret, pinfo.KeySet),
+			baseProvider: newBaseProvider(pinfo.Issuer, pinfo.ClientID, pinfo.ClientSecret, pinfo.KeySet, m.resourceStore, m.client),
 		}
 
 	}
@@ -33,15 +35,32 @@ func (m *middleware) getProvider(r *http.Request) (*http.Request, Provider) {
 	return setProvider(r, p), p
 }
 
+type ResourceMiddlewareOptions struct {
+	// required fields
+	GetBaseURL        BaseURLGetter
+	GetProviderInfo   ProviderInfoGetter
+	ResourceStore     ResourceStore
+	Types             map[string]ResourceType
+	ResourceTemplates ResourceTemplates
+
+	// optional fields
+	Client *http.Client
+}
+
 // ResourceMiddleware detects UMAResource by matching request path with paths. types is the map between
 // resource type and UMAResourceType. paths is the map between path template and resouce type as defined
 // in OpenAPI spec.
-func ResourceMiddleware(getBaseURL BaseURLGetter, getProviderInfo ProviderInfoGetter, types map[string]ResourceType, resourceTemplates ResourceTemplates) func(next http.Handler) http.Handler {
-	rm := newResourceMatcher(getBaseURL, types, resourceTemplates)
+func ResourceMiddleware(opts ResourceMiddlewareOptions) func(next http.Handler) http.Handler {
+	rm := newResourceMatcher(opts.GetBaseURL, opts.Types, opts.ResourceTemplates)
 	m := &middleware{
 		rm:              rm,
-		getProviderInfo: getProviderInfo,
+		getProviderInfo: opts.GetProviderInfo,
 		providers:       map[string]Provider{},
+		resourceStore:   opts.ResourceStore,
+		client:          http.DefaultClient,
+	}
+	if opts.Client != nil {
+		m.client = opts.Client
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

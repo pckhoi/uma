@@ -41,7 +41,7 @@ func (p *baseProvider) IsAuthenticated() bool {
 
 func (p *baseProvider) doRequest(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+p.ClientCreds.AccessToken)
-	return http.DefaultClient.Do(req)
+	return p.client.Do(req)
 }
 
 func (p *baseProvider) DoRequest(req *http.Request) (*http.Response, error) {
@@ -80,7 +80,7 @@ func (p *baseProvider) DoRequest(req *http.Request) (*http.Response, error) {
 }
 
 func (p *baseProvider) authenticateClient() error {
-	resp, err := postFormUrlencoded(p.UMADiscovery.TokenEndpoint, map[string][]string{
+	resp, err := p.postFormUrlencoded(p.UMADiscovery.TokenEndpoint, map[string][]string{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {p.ClientID},
 		"client_secret": {p.ClientSecret},
@@ -97,7 +97,7 @@ func (p *baseProvider) authenticateClient() error {
 }
 
 func (p *baseProvider) refreshClient() error {
-	resp, err := postFormUrlencoded(p.UMADiscovery.TokenEndpoint, map[string][]string{
+	resp, err := p.postFormUrlencoded(p.UMADiscovery.TokenEndpoint, map[string][]string{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {p.ClientID},
 		"refresh_token": {p.ClientCreds.RefreshToken},
