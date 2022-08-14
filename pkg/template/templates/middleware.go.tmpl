@@ -1,7 +1,7 @@
 package {{.Package}}
 
 import (
-    "github.com/pckhoi/uma-codegen/runtime"
+    "github.com/pckhoi/uma/runtime"
 )
 
 var umaResourceTypes = map[string]runtime.UMAResourceType{{`{`}}{{range $index, $element := .ResourceTypes}}
@@ -18,6 +18,6 @@ var umaResourceTypeAtPath = map[string]string{{`{`}}{{range $index, $element := 
 {{end}}}
 
 // UMAResourceMiddleware detects runtime.UMAResource to be used in subsequent requests
-func UMAResourceMiddleware(baseURL string) runtime.Middleware {
-    return runtime.UMAResouceMiddleware(baseURL, umaResourceTypes, umaResourceTypeAtPath)
+func UMAResourceMiddleware(getBaseURL runtime.BaseURLGetter) runtime.Middleware {
+    return runtime.UMAResouceMiddleware(getBaseURL, umaResourceTypes, umaResourceTypeAtPath)
 }

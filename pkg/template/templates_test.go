@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pckhoi/uma-codegen/pkg/types"
+	"github.com/pckhoi/uma/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +36,7 @@ func TestRenderMiddlewareCode(t *testing.T) {
 		`import (`,
 		`	"net/http"`,
 		``,
-		`	"github.com/pckhoi/uma-codegen/runtime"`,
+		`	"github.com/pckhoi/uma/runtime"`,
 		`)`,
 		``,
 		`var umaResourceTypes = map[string]runtime.UMAResourceType{`,

@@ -7,7 +7,7 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/pckhoi/uma-codegen/pkg/types"
+	"github.com/pckhoi/uma/pkg/types"
 )
 
 //go:embed templates/*.tmpl

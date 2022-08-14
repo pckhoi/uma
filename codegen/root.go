@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/pckhoi/uma-codegen/pkg/template"
-	"github.com/pckhoi/uma-codegen/pkg/types"
+	"github.com/pckhoi/uma/pkg/template"
+	"github.com/pckhoi/uma/pkg/types"
 	"github.com/spf13/cobra"
 )
 

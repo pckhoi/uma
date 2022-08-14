@@ -1,37 +1,38 @@
-package runtime_test
+package uma_test
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
-	"github.com/pckhoi/uma-codegen/runtime"
+	"github.com/pckhoi/uma"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type handler struct {
-	m             runtime.Middleware
-	onUMAResource func(r *runtime.UMAResource)
+	m             uma.Middleware
+	onUMAResource func(r *uma.UMAResource)
 }
 
 func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	h.m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.onUMAResource(runtime.GetUMAResource(r))
+		h.onUMAResource(uma.GetUMAResource(r))
 	})).ServeHTTP(rw, req)
 }
 
 func TestMiddleware(t *testing.T) {
-	var resource *runtime.UMAResource
+	var resource *uma.UMAResource
 	h := &handler{
-		onUMAResource: func(r *runtime.UMAResource) {
+		onUMAResource: func(r *uma.UMAResource) {
 			resource = r
 		},
 	}
 	s := httptest.NewServer(h)
-	types := map[string]runtime.UMAResourceType{
+	types := map[string]uma.UMAResourceType{
 		"user": {
 			Type:           "user",
 			Description:    "A user",
@@ -45,8 +46,11 @@ func TestMiddleware(t *testing.T) {
 			ResourceScopes: []string{"list"},
 		},
 	}
-	h.m = runtime.UMAResouceMiddleware(
-		s.URL+"/base",
+	h.m = uma.UMAResouceMiddleware(
+		func(r *http.Request) url.URL {
+			u, _ := url.Parse(s.URL + "/base")
+			return *u
+		},
 		types,
 		map[string]string{
 			"/users":      "users",
@@ -64,14 +68,14 @@ func TestMiddleware(t *testing.T) {
 
 	_, err = http.Get(s.URL + "/base/users")
 	require.NoError(t, err)
-	assert.Equal(t, &runtime.UMAResource{
+	assert.Equal(t, &uma.UMAResource{
 		UMAResourceType: types["users"],
 		Name:            s.URL + "/base/users",
 	}, resource)
 
 	_, err = http.Get(s.URL + "/base/users/123")
 	require.NoError(t, err)
-	assert.Equal(t, &runtime.UMAResource{
+	assert.Equal(t, &uma.UMAResource{
 		UMAResourceType: types["user"],
 		Name:            s.URL + "/base/users/123",
 	}, resource)

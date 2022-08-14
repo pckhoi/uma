@@ -1,4 +1,4 @@
-package runtime
+package uma
 
 import (
 	"context"
@@ -30,6 +30,9 @@ type UMAResourceType struct {
 type UMAResource struct {
 	UMAResourceType
 
+	// ID is the identifier defined by the authorization server
+	ID string `json:"_id,omitempty"`
+
 	// Name is the URI where the resource was detected
 	Name string `json:"name,omitempty"`
 }
@@ -58,7 +61,6 @@ type sortableResourceType struct {
 func processResourceType(path string, rt UMAResourceType) (*sortableResourceType, error) {
 	depth := strings.Count(path, "/")
 	pattern := fmt.Sprintf("^(%s)(?:/.+)?$", paramRegex.ReplaceAllString(path, `[^/]+`))
-	fmt.Printf("pattern %s\n", pattern)
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
@@ -103,19 +105,20 @@ func sortResourceTypes(types map[string]UMAResourceType, paths map[string]string
 	return sl, nil
 }
 
+// BaseURLGetter returns a string of this format:
+// "{SCHEME}://{PUBLIC_HOSTNAME}{ANY_BASE_PATH}"
+type BaseURLGetter func(r *http.Request) url.URL
+
 type resourceMatcher struct {
-	baseURL *url.URL
-	types   sortedResourceTypes
+	types      sortedResourceTypes
+	getBaseURL BaseURLGetter
 }
 
-func newResourceMatcher(baseURLStr string, types map[string]UMAResourceType, paths map[string]string) (*resourceMatcher, error) {
-	baseURL, err := url.Parse(baseURLStr)
-	if err != nil {
-		return nil, err
-	}
+func newResourceMatcher(getBaseURL BaseURLGetter, types map[string]UMAResourceType, paths map[string]string) (*resourceMatcher, error) {
 	m := &resourceMatcher{
-		baseURL: baseURL,
+		getBaseURL: getBaseURL,
 	}
+	var err error
 	m.types, err = sortResourceTypes(types, paths)
 	if err != nil {
 		return nil, err
@@ -124,48 +127,31 @@ func newResourceMatcher(baseURLStr string, types map[string]UMAResourceType, pat
 }
 
 func (m *resourceMatcher) matchResourceType(req *http.Request) (uri string, t *UMAResourceType) {
-	if !strings.HasPrefix(req.URL.Path, m.baseURL.Path) {
+	baseURL := m.getBaseURL(req)
+	if !strings.HasPrefix(req.URL.Path, baseURL.Path) {
 		return "", nil
 	}
-	path := strings.TrimPrefix(req.URL.Path, m.baseURL.Path)
+	path := strings.TrimPrefix(req.URL.Path, baseURL.Path)
 	for _, rt := range m.types {
 		match := rt.regex.FindStringSubmatch(path)
 		if match != nil {
 			t = &UMAResourceType{}
 			*t = rt.desc
-			uri = m.baseURL.String() + match[1]
+			uri = baseURL.String() + match[1]
 			return
 		}
 	}
 	return "", nil
 }
 
-func (m *resourceMatcher) match(req *http.Request) *http.Request {
+func (m *resourceMatcher) match(req *http.Request) (*http.Request, *UMAResource) {
 	uri, t := m.matchResourceType(req)
 	if uri != "" {
-		return setUMAResource(req, &UMAResource{
+		resource := &UMAResource{
 			Name:            uri,
 			UMAResourceType: *t,
-		})
+		}
+		return setUMAResource(req, resource), resource
 	}
-	return req
-}
-
-// Middleware is just a plain http middleware
-type Middleware func(next http.Handler) http.Handler
-
-// UMAResouceMiddleware detects UMAResource by matching request path with paths. types is the map between
-// resource type and UMAResourceType. paths is the map between path template and resouce type as defined
-// in OpenAPI spec.
-func UMAResouceMiddleware(baseURL string, types map[string]UMAResourceType, paths map[string]string) Middleware {
-	m, err := newResourceMatcher(baseURL, types, paths)
-	if err != nil {
-		panic(err)
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r = m.match(r)
-			next.ServeHTTP(w, r)
-		})
-	}
+	return req, nil
 }

@@ -1,4 +1,4 @@
-module github.com/pckhoi/uma-codegen
+module github.com/pckhoi/uma
 
 go 1.19
 
