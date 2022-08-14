@@ -32,13 +32,13 @@ func rootCmd() *cobra.Command {
 					}
 				}
 			}
-			paths := map[string]string{}
+			paths := map[string]types.UMAResouce{}
 			if doc.Paths.UMAResouce != nil {
-				paths[""] = doc.Paths.UMAResouce.Type
+				paths[""] = *doc.Paths.UMAResouce
 			} else {
 				for k, v := range doc.Paths.Paths {
 					if v.UMAResouce != nil {
-						paths[k] = v.UMAResouce.Type
+						paths[k] = *v.UMAResouce
 					}
 				}
 			}

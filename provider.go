@@ -24,7 +24,7 @@ type Provider interface {
 
 	DiscoverUMA() error
 	DoRequest(req *http.Request) (*http.Response, error)
-	RegisterResource(resource *UMAResource) (err error)
+	RegisterResource(resource *Resource) (err error)
 	RequestPermissionTicket(resourceID string, scopes ...string) (string, error)
 	Realm() string
 	AuthorizationServerURI() string
@@ -37,11 +37,11 @@ const (
 )
 
 type ProviderInfo struct {
-	Issuer       string
-	Type         ProviderType
-	ClientID     string
-	ClientSecret string
-	KeySet       KeySet
+	Issuer       string       `json:"issuer,omitempty"`
+	Type         ProviderType `json:"type,omitempty"`
+	ClientID     string       `json:"clientId,omitempty"`
+	ClientSecret string       `json:"clientSecret,omitempty"`
+	KeySet       KeySet       `json:"-"`
 }
 
 type providerKey struct{}
@@ -81,7 +81,7 @@ func (p *baseProvider) VerifySignature(ctx context.Context, jwt string) (payload
 	return p.KeySet.VerifySignature(ctx, jwt)
 }
 
-func (p *baseProvider) registerResource(resource *UMAResource, register func() (resourceID string, err error)) (resourceID string, err error) {
+func (p *baseProvider) registerResource(resource *Resource, register func() (resourceID string, err error)) (resourceID string, err error) {
 	if s, ok := p.registeredResources[resource.Name]; ok {
 		return s, nil
 	}
@@ -97,7 +97,7 @@ type createResourceResponse struct {
 	ID string `json:"_id"`
 }
 
-func (p *baseProvider) RegisterResource(resource *UMAResource) (err error) {
+func (p *baseProvider) RegisterResource(resource *Resource) (err error) {
 	rid, err := p.registerResource(resource, func() (resourceID string, err error) {
 		req, err := jsonRequest(http.MethodPost, p.UMADiscovery.ResourceRegistrationEndpoint, resource)
 		if err != nil {

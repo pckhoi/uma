@@ -1,10 +1,12 @@
 package {{.Package}}
 
 import (
-    "github.com/pckhoi/uma/runtime"
+    "net/http"
+
+    "github.com/pckhoi/uma"
 )
 
-var umaResourceTypes = map[string]runtime.UMAResourceType{{`{`}}{{range $index, $element := .ResourceTypes}}
+var umaResourceTypes = map[string]uma.ResourceType{{`{`}}{{range $index, $element := .ResourceTypes}}
     {{printf "%q" $index}}: {
         Type: {{printf "%q" $index}},
         Description: {{$element.Description | printf "%q"}},
@@ -13,11 +15,11 @@ var umaResourceTypes = map[string]runtime.UMAResourceType{{`{`}}{{range $index, 
     },
 {{end}}}
 
-var umaResourceTypeAtPath = map[string]string{{`{`}}{{range $index, $element := .ResourceTypeAtPath}}
-    {{printf "%q" $index}}: {{printf "%q" $element}},
+var resourceTemplates = ResourceTemplates{{`{`}}{{range $index, $element := .ResourceTypeAtPath}}
+    uma.NewResourceTemplate({{printf "%q" $index}}, {{printf "%q" $element.Type}}, {{printf "%q" $element.NameTemplate}}),
 {{end}}}
 
-// UMAResourceMiddleware detects runtime.UMAResource to be used in subsequent requests
-func UMAResourceMiddleware(getBaseURL runtime.BaseURLGetter) runtime.Middleware {
-    return runtime.UMAResouceMiddleware(getBaseURL, umaResourceTypes, umaResourceTypeAtPath)
+// UMAResourceMiddleware detects uma.Resource to be used in subsequent requests
+func UMAResourceMiddleware(getBaseURL uma.BaseURLGetter) func(next http.Handler) http.Handler {
+    return runtime.UMAResouceMiddleware(getBaseURL, umaResourceTypes, resourceTemplates)
 }

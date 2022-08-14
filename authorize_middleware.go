@@ -75,7 +75,7 @@ func (tok *RPT) IsValid(resourceID, scope string) bool {
 func AuthorizeMiddleware(includeScopeInPermissionTicket bool) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			resource := GetUMAResource(r)
+			resource := GetResource(r)
 			p := getProvider(r)
 			if resource == nil {
 				next.ServeHTTP(w, r)

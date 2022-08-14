@@ -36,23 +36,21 @@ func (m *middleware) getProvider(r *http.Request) (*http.Request, Provider) {
 // ResourceMiddleware detects UMAResource by matching request path with paths. types is the map between
 // resource type and UMAResourceType. paths is the map between path template and resouce type as defined
 // in OpenAPI spec.
-func ResourceMiddleware(getBaseURL BaseURLGetter, getProviderInfo ProviderInfoGetter, types map[string]UMAResourceType, paths map[string]string) func(next http.Handler) http.Handler {
-	rm, err := newResourceMatcher(getBaseURL, types, paths)
-	if err != nil {
-		panic(err)
-	}
+func ResourceMiddleware(getBaseURL BaseURLGetter, getProviderInfo ProviderInfoGetter, types map[string]ResourceType, resourceTemplates ResourceTemplates) func(next http.Handler) http.Handler {
+	rm := newResourceMatcher(getBaseURL, types, resourceTemplates)
 	m := &middleware{
 		rm:              rm,
 		getProviderInfo: getProviderInfo,
+		providers:       map[string]Provider{},
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var resource *UMAResource
+			var resource *Resource
 			r, resource = m.rm.match(r)
 			if resource != nil {
 				var p Provider
 				r, p = m.getProvider(r)
-				if err = p.RegisterResource(resource); err != nil {
+				if err := p.RegisterResource(resource); err != nil {
 					panic(err)
 				}
 			}

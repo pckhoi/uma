@@ -13,11 +13,13 @@ const yamlStr = `
 paths:
   x-uma-resource:
     type: https://example.co/rsrcs/users
+    name: Users
   /users:
     get: {}
   /users/{id}:
     x-uma-resource:
       type: https://example.co/rsrcs/user
+      name: "User {id}"
     get: {}
 components:
   securitySchemes:
@@ -49,14 +51,16 @@ const jsonStr = `
 {
 	"paths": {
 	  "x-uma-resource": {
-		"type": "https://example.co/rsrcs/users"
+		"type": "https://example.co/rsrcs/users",
+		"name": "Users"
 	  },
 	  "/users": {
 		"get": {}
 	  },
 	  "/users/{id}": {
 		"x-uma-resource": {
-		  "type": "https://example.co/rsrcs/user"
+		  "type": "https://example.co/rsrcs/user",
+		  "name": "User {id}"
 		},
 		"get": {}
 	  }
@@ -115,13 +119,15 @@ func TestOpenAPISpect(t *testing.T) {
 		assertUnmarshalSpec(t, c.Filename, c.Content, &OpenAPISpec{
 			Paths: &Paths{
 				UMAResouce: &UMAResouce{
-					Type: "https://example.co/rsrcs/users",
+					Type:         "https://example.co/rsrcs/users",
+					NameTemplate: "Users",
 				},
 				Paths: map[string]Path{
 					"/users": {},
 					"/users/{id}": {
 						UMAResouce: &UMAResouce{
-							Type: "https://example.co/rsrcs/user",
+							Type:         "https://example.co/rsrcs/user",
+							NameTemplate: "User {id}",
 						},
 					},
 				},

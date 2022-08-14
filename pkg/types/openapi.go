@@ -10,7 +10,8 @@ import (
 )
 
 type UMAResouce struct {
-	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+	Type         string `json:"type,omitempty" yaml:"type,omitempty"`
+	NameTemplate string `json:"name,omitempty" yaml:"name,omitempty"`
 }
 
 type UMAResourceType struct {

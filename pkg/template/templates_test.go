@@ -25,9 +25,15 @@ func TestRenderMiddlewareCode(t *testing.T) {
 				ResourceScopes: []string{"list"},
 			},
 		},
-		map[string]string{
-			"/users":      "users",
-			"/users/{id}": "user",
+		map[string]types.UMAResouce{
+			"/users": {
+				Type:         "users",
+				NameTemplate: "Users",
+			},
+			"/users/{id}": {
+				Type:         "user",
+				NameTemplate: "User {id}",
+			},
 		},
 	))
 	assert.Equal(t, strings.Join([]string{
@@ -36,10 +42,10 @@ func TestRenderMiddlewareCode(t *testing.T) {
 		`import (`,
 		`	"net/http"`,
 		``,
-		`	"github.com/pckhoi/uma/runtime"`,
+		`	"github.com/pckhoi/uma"`,
 		`)`,
 		``,
-		`var umaResourceTypes = map[string]runtime.UMAResourceType{`,
+		`var umaResourceTypes = map[string]uma.ResourceType{`,
 		`	"user": {`,
 		`		Type:           "user",`,
 		`		Description:    "A user",`,
@@ -55,15 +61,15 @@ func TestRenderMiddlewareCode(t *testing.T) {
 		`	},`,
 		`}`,
 		``,
-		`var umaResourceTypeAtPath = map[string]string{`,
-		`	"/users": "users",`,
+		`var resourceTemplates = ResourceTemplates{`,
+		`	uma.NewResourceTemplate("/users", "users", "Users"),`,
 		``,
-		`	"/users/{id}": "user",`,
+		`	uma.NewResourceTemplate("/users/{id}", "user", "User {id}"),`,
 		`}`,
 		``,
-		`// UMAResourceMiddleware`,
-		`func UMAResourceMiddleware(baseURL string) runtime.Middleware {`,
-		`	return runtime.UMAResouceMiddleware(baseURL, umaResourceTypes, umaResourceTypeAtPath)`,
+		`// UMAResourceMiddleware detects uma.Resource to be used in subsequent requests`,
+		`func UMAResourceMiddleware(getBaseURL uma.BaseURLGetter) func(next http.Handler) http.Handler {`,
+		`	return runtime.UMAResouceMiddleware(getBaseURL, umaResourceTypes, resourceTemplates)`,
 		`}`,
 		``,
 	}, "\n"), buf.String())

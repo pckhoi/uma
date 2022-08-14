@@ -26,10 +26,10 @@ func init() {
 type middlewareCode struct {
 	Package            string
 	ResourceTypes      map[string]types.UMAResourceType
-	ResourceTypeAtPath map[string]string
+	ResourceTypeAtPath map[string]types.UMAResouce
 }
 
-func RenderMiddlewareCode(wr io.Writer, pkg string, types map[string]types.UMAResourceType, paths map[string]string) error {
+func RenderMiddlewareCode(wr io.Writer, pkg string, types map[string]types.UMAResourceType, paths map[string]types.UMAResouce) error {
 	buf := bytes.NewBuffer(nil)
 	if err := tmpl.ExecuteTemplate(buf, "middleware.go.tmpl", middlewareCode{
 		Package:            pkg,
