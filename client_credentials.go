@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/pckhoi/uma/pkg/httputil"
 )
 
 type ClientCreds struct {
@@ -33,10 +35,6 @@ func (c *ClientCreds) expired() bool {
 
 func (c *ClientCreds) refreshExpired() bool {
 	return c.refreshExpiresTime.Before(time.Now())
-}
-
-func (p *baseProvider) IsAuthenticated() bool {
-	return p.ClientCreds != nil
 }
 
 func (p *baseProvider) doRequest(req *http.Request) (*http.Response, error) {
@@ -73,14 +71,14 @@ func (p *baseProvider) DoRequest(req *http.Request) (*http.Response, error) {
 			if err != nil {
 				return nil, err
 			}
-			return nil, errUnanticipatedResponse(resp, body)
+			return nil, httputil.ErrUnanticipatedResponse(resp, body)
 		}
 	}
 	return resp, nil
 }
 
 func (p *baseProvider) authenticateClient() error {
-	resp, err := p.postFormUrlencoded(p.UMADiscovery.TokenEndpoint, map[string][]string{
+	resp, err := httputil.PostFormUrlencoded(p.client, p.UMADiscovery.TokenEndpoint, nil, map[string][]string{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {p.ClientID},
 		"client_secret": {p.ClientSecret},
@@ -89,7 +87,7 @@ func (p *baseProvider) authenticateClient() error {
 		return err
 	}
 	p.ClientCreds = &ClientCreds{}
-	if err = decodeJSONResponse(resp, p.ClientCreds); err != nil {
+	if err = httputil.DecodeJSONResponse(resp, p.ClientCreds); err != nil {
 		return err
 	}
 	p.ClientCreds.setExpiresTime()
@@ -97,7 +95,7 @@ func (p *baseProvider) authenticateClient() error {
 }
 
 func (p *baseProvider) refreshClient() error {
-	resp, err := p.postFormUrlencoded(p.UMADiscovery.TokenEndpoint, map[string][]string{
+	resp, err := httputil.PostFormUrlencoded(p.client, p.UMADiscovery.TokenEndpoint, nil, map[string][]string{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {p.ClientID},
 		"refresh_token": {p.ClientCreds.RefreshToken},
@@ -106,7 +104,7 @@ func (p *baseProvider) refreshClient() error {
 		return err
 	}
 	p.ClientCreds = &ClientCreds{}
-	if err = decodeJSONResponse(resp, p.ClientCreds); err != nil {
+	if err = httputil.DecodeJSONResponse(resp, p.ClientCreds); err != nil {
 		return err
 	}
 	p.ClientCreds.setExpiresTime()

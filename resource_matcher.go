@@ -48,17 +48,15 @@ func GetResource(r *http.Request) *Resource {
 	return nil
 }
 
-// BaseURLGetter returns a string of this format:
-// "{SCHEME}://{PUBLIC_HOSTNAME}{ANY_BASE_PATH}"
-type BaseURLGetter func(r *http.Request) url.URL
+type URLGetter func(r *http.Request) url.URL
 
 type resourceMatcher struct {
 	resourceTemplates ResourceTemplates
-	getBaseURL        BaseURLGetter
+	getBaseURL        URLGetter
 	types             map[string]ResourceType
 }
 
-func newResourceMatcher(getBaseURL BaseURLGetter, types map[string]ResourceType, resourceTemplates ResourceTemplates) *resourceMatcher {
+func newResourceMatcher(getBaseURL URLGetter, types map[string]ResourceType, resourceTemplates ResourceTemplates) *resourceMatcher {
 	sort.Sort(sort.Reverse(resourceTemplates))
 	return &resourceMatcher{
 		getBaseURL:        getBaseURL,

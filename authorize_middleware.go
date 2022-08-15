@@ -77,11 +77,11 @@ func AuthorizeMiddleware(includeScopeInPermissionTicket bool) func(next http.Han
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resource := GetResource(r)
 			p := getProvider(r)
-			if resource == nil {
+			scope := GetScope(r)
+			if resource == nil || scope == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
-			scope := GetScope(r)
 			token := getBearerToken(r)
 			if token == "" {
 				var ticket string

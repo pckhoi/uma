@@ -3,6 +3,8 @@ package uma
 import (
 	"context"
 	"net/http"
+
+	"github.com/pckhoi/uma/pkg/httputil"
 )
 
 // KeySet mirrors oidc.KeySet interface. Learn more at
@@ -106,7 +108,7 @@ type createResourceResponse struct {
 
 func (p *baseProvider) RegisterResource(resource *Resource) (err error) {
 	rid, err := p.registerResource(resource, func() (resourceID string, err error) {
-		req, err := jsonRequest(http.MethodPost, p.UMADiscovery.ResourceRegistrationEndpoint, resource)
+		req, err := httputil.JSONRequest(http.MethodPost, p.UMADiscovery.ResourceRegistrationEndpoint, resource)
 		if err != nil {
 			return "", err
 		}
@@ -114,11 +116,11 @@ func (p *baseProvider) RegisterResource(resource *Resource) (err error) {
 		if err != nil {
 			return "", err
 		}
-		if err = ensure2XX(resp); err != nil {
+		if err = httputil.Ensure2XX(resp); err != nil {
 			return "", err
 		}
 		respObj := &createResourceResponse{}
-		if err = decodeJSONResponse(resp, respObj); err != nil {
+		if err = httputil.DecodeJSONResponse(resp, respObj); err != nil {
 			return "", err
 		}
 		return respObj.ID, nil
@@ -140,7 +142,7 @@ type permissionResponse struct {
 }
 
 func (p *baseProvider) RequestPermissionTicket(resourceID string, scopes ...string) (string, error) {
-	req, err := jsonRequest(http.MethodPost, p.UMADiscovery.PermissionEndpoint, []permissionRequest{
+	req, err := httputil.JSONRequest(http.MethodPost, p.UMADiscovery.PermissionEndpoint, []permissionRequest{
 		{ResourceID: resourceID, ResourceScopes: scopes},
 	})
 	if err != nil {
@@ -150,11 +152,11 @@ func (p *baseProvider) RequestPermissionTicket(resourceID string, scopes ...stri
 	if err != nil {
 		return "", err
 	}
-	if err = ensure2XX(resp); err != nil {
+	if err = httputil.Ensure2XX(resp); err != nil {
 		return "", err
 	}
 	respObj := &permissionResponse{}
-	if err = decodeJSONResponse(resp, respObj); err != nil {
+	if err = httputil.DecodeJSONResponse(resp, respObj); err != nil {
 		return "", err
 	}
 	return respObj.Ticket, nil
