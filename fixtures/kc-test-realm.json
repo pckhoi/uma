@@ -476,12 +476,41 @@
         "impersonate": true,
         "manage": true
       },
+      "realmRoles": ["reader", "writer"],
       "credentials": [
         {
           "id": "b9561076-d415-4645-96fb-ee09c51ea9cd",
           "type": "password",
           "userLabel": "My password",
           "createdDate": 1660551987097,
+          "temporary": false,
+          "value": "password"
+        }
+      ]
+    },
+    {
+      "id": "029b4e10-1c6b-4304-bbbd-cac40f386e1f",
+      "createdTimestamp": 1661246316198,
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": false,
+      "firstName": "Alice",
+      "lastName": "Wilson",
+      "email": "alice@example.com",
+      "access": {
+        "manageGroupMembership": true,
+        "view": true,
+        "mapRoles": true,
+        "impersonate": true,
+        "manage": true
+      },
+      "realmRoles": ["reader"],
+      "credentials": [
+        {
+          "id": "d8d5d736-3945-48f4-bf55-a9101573848f",
+          "type": "password",
+          "userLabel": "My password",
+          "createdDate": 1661246332194,
           "temporary": false,
           "value": "password"
         }
@@ -889,36 +918,12 @@
             "uris": ["/*"]
           }
         ],
-        "policies": [
-          {
-            "id": "05bca59a-f151-4e12-99a6-bdd8fb28f6a4",
-            "name": "staff_can_read",
-            "description": "",
-            "type": "role",
-            "logic": "POSITIVE",
-            "decisionStrategy": "UNANIMOUS",
-            "config": {
-              "roles": "[{\"id\":\"5ed53c0f-191c-4877-888c-33fcaafbfe27\",\"required\":false},{\"id\":\"50891d31-b6ac-4b59-93cc-8b8902c7366d\",\"required\":false}]"
-            }
-          },
-          {
-            "id": "25182839-a5ed-44bb-95e7-d9a1052e8861",
-            "name": "writer_can_write",
-            "description": "",
-            "type": "role",
-            "logic": "POSITIVE",
-            "decisionStrategy": "UNANIMOUS",
-            "config": {
-              "roles": "[{\"id\":\"50891d31-b6ac-4b59-93cc-8b8902c7366d\",\"required\":true}]"
-            }
-          }
-        ],
+        "policies": [],
         "scopes": [],
         "decisionStrategy": "UNANIMOUS"
       }
     },
     {
-      "id": "3eb27790-0724-49d9-baa4-199b693f7651",
       "clientId": "test-client-2",
       "name": "",
       "description": "",
@@ -929,6 +934,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
+      "secret": "change-me",
       "redirectUris": [],
       "webOrigins": [],
       "notBefore": 0,
@@ -938,14 +944,15 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "publicClient": true,
+      "publicClient": false,
       "frontchannelLogout": true,
       "protocol": "openid-connect",
       "attributes": {
         "oidc.ciba.grant.enabled": "false",
+        "client.secret.creation.time": "1660646332",
+        "backchannel.logout.session.required": "true",
         "display.on.consent.screen": "false",
         "oauth2.device.authorization.grant.enabled": "false",
-        "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "false"
       },
       "authenticationFlowBindingOverrides": {},
@@ -963,7 +970,12 @@
         "phone",
         "offline_access",
         "microprofile-jwt"
-      ]
+      ],
+      "access": {
+        "view": true,
+        "configure": true,
+        "manage": true
+      }
     }
   ],
   "clientScopes": [

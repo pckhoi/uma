@@ -47,7 +47,6 @@ func (rt *ResourceTemplate) Match(types map[string]ResourceType, baseURL, path s
 		if paramName == "" {
 			continue
 		}
-		fmt.Printf("paramName: %q\n", paramName)
 		name = strings.ReplaceAll(name, fmt.Sprintf("{%s}", paramName), matches[rt.pathRegex.SubexpIndex(paramName)])
 	}
 	return &Resource{

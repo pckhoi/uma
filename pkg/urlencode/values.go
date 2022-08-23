@@ -31,6 +31,9 @@ func fieldName(field reflect.StructField) string {
 }
 
 func serializeFieldValue(v reflect.Value) ([]string, error) {
+	if v.IsZero() {
+		return nil, nil
+	}
 	switch v.Kind() {
 	case reflect.String:
 		return []string{v.String()}, nil
@@ -83,7 +86,9 @@ func ToValues(obj interface{}) (*url.Values, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error serializing field %q: %v", structField.Name, err)
 		}
-		(*values)[fieldName] = sl
+		if sl != nil {
+			(*values)[fieldName] = sl
+		}
 	}
 	return values, nil
 }

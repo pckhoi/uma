@@ -1,39 +1,35 @@
 package uma
 
 import (
-	"fmt"
 	"net/http"
 )
 
-type ProviderInfoGetter func(r *http.Request) ProviderInfo
+type ProviderGetter func(r *http.Request) Provider
 
-type middleware struct {
-	rm              *resourceMatcher
-	getProviderInfo ProviderInfoGetter
-	providers       map[string]Provider
-	resourceStore   ResourceStore
-	client          *http.Client
+type ResourceStore interface {
+	Set(name, id string)
+	Get(name string) (id string)
 }
 
-func (m *middleware) getProvider(r *http.Request) (*http.Request, Provider) {
-	pinfo := m.getProviderInfo(r)
-	if v, ok := m.providers[pinfo.Issuer]; ok {
-		return setProvider(r, v), v
+type resourceMiddleware struct {
+	rm            *resourceMatcher
+	getProvider   ProviderGetter
+	resourceStore ResourceStore
+	client        *http.Client
+}
+
+func (m *resourceMiddleware) createResource(p Provider, resource *Resource) (err error) {
+	if s := m.resourceStore.Get(resource.Name); s != "" {
+		resource.ID = s
+		return nil
 	}
-	var p Provider
-	switch pinfo.Type {
-	case Keycloak:
-		p = &keycloakProvider{
-			baseProvider: newBaseProvider(pinfo.Issuer, pinfo.ClientID, pinfo.ClientSecret, pinfo.KeySet, m.resourceStore, m.client),
-		}
-	default:
-		panic(fmt.Errorf("unsupported provider type %q", pinfo.Type))
+	resourceID, err := p.CreateResource(resource)
+	if err != nil {
+		return err
 	}
-	m.providers[pinfo.Issuer] = p
-	if err := p.DiscoverUMA(); err != nil {
-		panic(err)
-	}
-	return setProvider(r, p), p
+	m.resourceStore.Set(resource.Name, resourceID)
+	resource.ID = resourceID
+	return nil
 }
 
 type ResourceMiddlewareOptions struct {
@@ -43,9 +39,9 @@ type ResourceMiddlewareOptions struct {
 	// server entry in openapi spec. It should have this format: "{SCHEME}://{PUBLIC_HOSTNAME}{ANY_BASE_PATH}"
 	GetBaseURL URLGetter
 
-	// GetProviderInfo returns the provider info given the request. It allows you to use different UMA
+	// GetProvider returns the provider info given the request. It allows you to use different UMA
 	// providers for different requests if you so wish
-	GetProviderInfo ProviderInfoGetter
+	GetProvider ProviderGetter
 
 	// ResourceStore persistently stores resource name and id. Some UMA providers don't like to be told
 	// twice about the same resource. This tells the middleware which resource is already registered so
@@ -71,12 +67,11 @@ type ResourceMiddlewareOptions struct {
 // in OpenAPI spec.
 func ResourceMiddleware(opts ResourceMiddlewareOptions) func(next http.Handler) http.Handler {
 	rm := newResourceMatcher(opts.GetBaseURL, opts.Types, opts.ResourceTemplates)
-	m := &middleware{
-		rm:              rm,
-		getProviderInfo: opts.GetProviderInfo,
-		providers:       map[string]Provider{},
-		resourceStore:   opts.ResourceStore,
-		client:          http.DefaultClient,
+	m := &resourceMiddleware{
+		rm:            rm,
+		getProvider:   opts.GetProvider,
+		resourceStore: opts.ResourceStore,
+		client:        http.DefaultClient,
 	}
 	if opts.Client != nil {
 		m.client = opts.Client
@@ -86,9 +81,7 @@ func ResourceMiddleware(opts ResourceMiddlewareOptions) func(next http.Handler) 
 			var resource *Resource
 			r, resource = m.rm.match(r)
 			if resource != nil {
-				var p Provider
-				r, p = m.getProvider(r)
-				if err := p.RegisterResource(resource); err != nil {
+				if err := m.createResource(m.getProvider(r), resource); err != nil {
 					panic(err)
 				}
 			}

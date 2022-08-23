@@ -52,4 +52,12 @@ func TestToValues(t *testing.T) {
 		"string_field":        {"abc"},
 		"string_slice_field":  {"a", "b"},
 	}), *values)
+
+	values, err = ToValues(&Payload{
+		StringField: "abc",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, url.Values(map[string][]string{
+		"string_field": {"abc"},
+	}), *values)
 }

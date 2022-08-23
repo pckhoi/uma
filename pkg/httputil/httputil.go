@@ -2,6 +2,7 @@ package httputil
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +36,18 @@ func DecodeJSONResponse(resp *http.Response, obj interface{}) error {
 	return json.Unmarshal(body, obj)
 }
 
+func GetRedirectLocation(resp *http.Response) (loc *url.URL, err error) {
+	if resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusTemporaryRedirect {
+		return url.Parse(resp.Header.Get("Location"))
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return nil, ErrUnanticipatedResponse(resp, body)
+}
+
 func ErrUnanticipatedResponse(resp *http.Response, body []byte) error {
 	return fmt.Errorf(
 		"unanticipated response %d: (%s) %s",
@@ -54,21 +67,40 @@ func Ensure2XX(resp *http.Response) error {
 	return nil
 }
 
-func PostFormUrlencoded(client *http.Client, url string, modifyRequest func(r *http.Request), values url.Values) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader([]byte(values.Encode())))
-	if err != nil {
-		return nil, err
+type clientKey struct{}
+
+func WithClient(req *http.Request, client *http.Client) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), clientKey{}, client))
+}
+
+func getClient(req *http.Request) *http.Client {
+	if v := req.Context().Value(clientKey{}); v != nil {
+		return v.(*http.Client)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if modifyRequest != nil {
-		modifyRequest(req)
+	return nil
+}
+
+type acessTokenKey struct{}
+
+func WithAccessToken(req *http.Request, token string) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), acessTokenKey{}, token))
+}
+
+func getAccessToken(req *http.Request) string {
+	if v := req.Context().Value(acessTokenKey{}); v != nil {
+		return v.(string)
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	return ""
+}
+
+func DoRequest(req *http.Request) (*http.Response, error) {
+	client := getClient(req)
+	if client == nil {
+		client = http.DefaultClient
 	}
-	if err := Ensure2XX(resp); err != nil {
-		return nil, err
+	token := getAccessToken(req)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	return resp, nil
+	return client.Do(req)
 }

@@ -33,9 +33,9 @@ func getBearerToken(r *http.Request) string {
 }
 
 type Permission struct {
-	ResourceSetID   string   `json:"resource_set_id,omitempty"`
-	ResourceSetName string   `json:"resource_set_name,omitempty"`
-	ResourceScopes  []string `json:"resource_scopes,omitempty"`
+	Rsid   string   `json:"rsid,omitempty"`
+	Rsname string   `json:"rsname,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 type Authorization struct {
@@ -53,16 +53,18 @@ type RPT struct {
 	Azp           string         `json:"azp"`
 }
 
-func (tok *RPT) IsValid(resourceID, scope string) bool {
-	iat := time.Unix(int64(tok.Iat), 0)
-	exp := time.Unix(int64(tok.Exp), 0)
-	now := time.Now()
-	if !now.After(iat) || !now.Before(exp) {
-		return false
+func (tok *RPT) IsValid(resourceID, scope string, disableTokenExpirationCheck bool) bool {
+	if !disableTokenExpirationCheck {
+		iat := time.Unix(int64(tok.Iat), 0)
+		exp := time.Unix(int64(tok.Exp), 0)
+		now := time.Now()
+		if !now.After(iat) || !now.Before(exp) {
+			return false
+		}
 	}
 	for _, p := range tok.Authorization.Permissions {
-		if p.ResourceSetID == resourceID {
-			for _, s := range p.ResourceScopes {
+		if p.Rsid == resourceID {
+			for _, s := range p.Scopes {
 				if s == scope {
 					return true
 				}
@@ -72,11 +74,35 @@ func (tok *RPT) IsValid(resourceID, scope string) bool {
 	return false
 }
 
-func AuthorizeMiddleware(includeScopeInPermissionTicket bool) func(next http.Handler) http.Handler {
+type AuthorizeMiddlewareOptions struct {
+	GetProvider                    ProviderGetter
+	IncludeScopeInPermissionTicket bool
+	DisableTokenExpirationCheck    bool
+}
+
+func askForTicket(w http.ResponseWriter, p Provider, resource *Resource, scope string, opts AuthorizeMiddlewareOptions) {
+	var ticket string
+	var err error
+	if opts.IncludeScopeInPermissionTicket {
+		ticket, err = p.CreatePermissionTicket(resource.ID, scope)
+	} else {
+		ticket, err = p.CreatePermissionTicket(resource.ID)
+	}
+	if err != nil {
+		panic(err)
+	}
+	directives := p.WWWAuthenticateDirectives()
+	w.Header().Set("WWW-Authenticate",
+		fmt.Sprintf(`UMA realm=%q, as_uri=%q, ticket=%q`, directives.Realm, directives.AsUri, ticket),
+	)
+	w.WriteHeader(http.StatusUnauthorized)
+}
+
+func AuthorizeMiddleware(opts AuthorizeMiddlewareOptions) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resource := GetResource(r)
-			p := getProvider(r)
+			p := opts.GetProvider(r)
 			scope := GetScope(r)
 			if resource == nil || scope == "" {
 				next.ServeHTTP(w, r)
@@ -84,20 +110,7 @@ func AuthorizeMiddleware(includeScopeInPermissionTicket bool) func(next http.Han
 			}
 			token := getBearerToken(r)
 			if token == "" {
-				var ticket string
-				var err error
-				if includeScopeInPermissionTicket {
-					ticket, err = p.RequestPermissionTicket(resource.ID, scope)
-				} else {
-					ticket, err = p.RequestPermissionTicket(resource.ID)
-				}
-				if err != nil {
-					panic(err)
-				}
-				w.Header().Set("WWW-Authenticate",
-					fmt.Sprintf(`UMA realm=%q, as_uri=%q, ticket=%q`, p.Realm(), p.AuthorizationServerURI(), ticket),
-				)
-				w.WriteHeader(http.StatusUnauthorized)
+				askForTicket(w, p, resource, scope, opts)
 				return
 			}
 			b, err := p.VerifySignature(r.Context(), token)
@@ -108,11 +121,11 @@ func AuthorizeMiddleware(includeScopeInPermissionTicket bool) func(next http.Han
 			if err = json.Unmarshal(b, rpt); err != nil {
 				panic(err)
 			}
-			if rpt.IsValid(resource.ID, scope) {
+			if rpt.IsValid(resource.ID, scope, opts.DisableTokenExpirationCheck) {
 				next.ServeHTTP(w, r)
 				return
 			}
-			w.WriteHeader(http.StatusForbidden)
+			askForTicket(w, p, resource, scope, opts)
 		})
 	}
 }

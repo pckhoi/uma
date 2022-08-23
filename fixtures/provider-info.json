@@ -1,6 +1,0 @@
-{
-  "type": "keycloak",
-  "issuer": "http://localhost:8080/realms/test-realm",
-  "clientId": "test-client",
-  "clientSecret": "change-me"
-}

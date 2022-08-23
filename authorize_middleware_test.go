@@ -1,81 +1,104 @@
 package uma_test
 
 import (
-	"context"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"testing"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/pckhoi/uma"
-	"github.com/stretchr/testify/assert"
+	"github.com/pckhoi/uma/pkg/rp"
 	"github.com/stretchr/testify/require"
 )
 
+func createKeycloakRPClient(t *testing.T, client *http.Client) *rp.KeycloakClient {
+	t.Helper()
+	kc, err := rp.NewKeycloakClient(
+		"http://localhost:8080/realms/test-realm",
+		"test-client-2", "change-me",
+		client,
+	)
+	require.NoError(t, err)
+	return kc
+}
+
+func registerUserResources(t *testing.T, api *mockAPI) {
+	t.Helper()
+	api.RegisterResource(t, "/users")
+	api.RegisterResource(t, "/users/1")
+	for _, role := range []string{"reader", "writer"} {
+		_, err := api.kp.CreatePermissionForResource(api.rscStore.Get("Users"), &uma.KcPermission{
+			Name:        role + "-list-users",
+			Description: role + " can list users",
+			Scopes:      []string{"list"},
+			Roles:       []string{role},
+		})
+		require.NoError(t, err)
+		_, err = api.kp.CreatePermissionForResource(api.rscStore.Get("User 1"), &uma.KcPermission{
+			Name:        role + "-read-user",
+			Description: role + " can read user",
+			Scopes:      []string{"read"},
+			Roles:       []string{role},
+		})
+		require.NoError(t, err)
+	}
+	_, err := api.kp.CreatePermissionForResource(api.rscStore.Get("User 1"), &uma.KcPermission{
+		Name:        "writer-write-user",
+		Description: "Writers can write user",
+		Scopes:      []string{"write"},
+		Roles:       []string{"writer"},
+	})
+	require.NoError(t, err)
+}
+
 func TestAuthorizeMiddleware(t *testing.T) {
-	client, stop := recordHTTP(t, "test_resource_middleware")
+	client, stop := recordHTTP(t, "test_authorize_middleware", false)
 	defer stop()
-	h := &handler{}
-	s := httptest.NewServer(h)
-	defer s.Close()
-	types := map[string]uma.ResourceType{
-		"user": {
-			Type:           "user",
-			IconUri:        "https://example.com/rsrcs/user.png",
-			ResourceScopes: []string{"read", "write"},
-		},
-		"users": {
-			Type:           "users",
-			IconUri:        "https://example.com/rsrcs/users.png",
-			ResourceScopes: []string{"list"},
-		},
-	}
-	h.middlewares = []Middleware{
-		uma.ResourceMiddleware(uma.ResourceMiddlewareOptions{
-			GetBaseURL: func(r *http.Request) url.URL {
-				u, _ := url.Parse(s.URL + "/base")
-				return *u
-			},
-			GetProviderInfo: func(r *http.Request) uma.ProviderInfo {
-				pi := &uma.ProviderInfo{}
-				readFixture(t, "provider-info.json", pi)
-				pi.KeySet = oidc.NewRemoteKeySet(context.Background(), pi.Issuer+"/protocol/openid-connect/certs")
-				return *pi
-			},
-			ResourceStore: make(mockResourceStore),
-			Types:         types,
-			ResourceTemplates: uma.ResourceTemplates{
-				uma.NewResourceTemplate("/users", "users", "Users"),
-				uma.NewResourceTemplate("/users/{id}", "user", "User {id}"),
-			},
-			Client: client,
-		}),
-		func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				resource := uma.GetResource(r)
-				if resource != nil {
-					if r.Method == http.MethodGet {
-						if resource.Type == "users" {
-							r = uma.SetScope(r, "list")
-						} else {
-							r = uma.SetScope(r, "read")
-						}
-					} else {
-						r = uma.SetScope(r, "write")
-					}
-				}
-				next.ServeHTTP(w, r)
-			})
-		},
-		uma.AuthorizeMiddleware(true),
-	}
+	api := mockUserAPI(t, client, true, true)
+	defer api.Stop(t)
+	registerUserResources(t, api)
 
-	resp, err := http.Get(s.URL + "/abc")
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	kc := createKeycloakRPClient(t, client)
 
-	resp, err = http.Get(s.URL + "/base/users")
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	api.AssertResponseStatus(t, http.MethodGet, "/abc", "", http.StatusOK)
+
+	rpt := api.AskForRPT(t, kc, "johnd", http.MethodGet, "/base/users", "")
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusOK)
+
+	rpt = api.AskForRPT(t, kc, "johnd", http.MethodGet, "/base/users/1", rpt)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodPost, "/base/users/1", rpt, http.StatusUnauthorized)
+
+	rpt = api.AskForRPT(t, kc, "johnd", http.MethodPost, "/base/users/1", rpt)
+	api.AssertResponseStatus(t, http.MethodPost, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusOK)
+
+	rpt = api.AskForRPT(t, kc, "alice", http.MethodGet, "/base/users/1", "")
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusUnauthorized)
+
+	api.AssertPermissionNotGranted(t, kc, "alice", http.MethodPost, "/base/users/1")
+}
+
+func TestAuthorizeMiddlewareNoSpecificScope(t *testing.T) {
+	client, stop := recordHTTP(t, "test_authorize_middleware_no_specific_scope", false)
+	defer stop()
+	api := mockUserAPI(t, client, true, false)
+	defer api.Stop(t)
+	registerUserResources(t, api)
+
+	kc := createKeycloakRPClient(t, client)
+
+	rpt := api.AskForRPT(t, kc, "johnd", http.MethodGet, "/base/users", "")
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusOK)
+
+	rpt = api.AskForRPT(t, kc, "johnd", http.MethodGet, "/base/users/1", "")
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodPost, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusUnauthorized)
+
+	rpt = api.AskForRPT(t, kc, "alice", http.MethodGet, "/base/users/1", "")
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users/1", rpt, http.StatusOK)
+	api.AssertResponseStatus(t, http.MethodPost, "/base/users/1", rpt, http.StatusUnauthorized)
+	api.AssertResponseStatus(t, http.MethodGet, "/base/users", rpt, http.StatusUnauthorized)
 }

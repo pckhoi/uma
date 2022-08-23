@@ -1,4 +1,4 @@
-package client
+package rp
 
 import (
 	"context"
@@ -22,9 +22,6 @@ func NewKeycloakClient(issuer, clientID, clientSecret string, client *http.Clien
 		clientSecret: clientSecret,
 		client:       client,
 	}
-	if kc.client == nil {
-		kc.client = http.DefaultClient
-	}
 	var err error
 	kc.oidc, err = oidc.NewProvider(context.Background(), issuer)
 	if err != nil {
@@ -40,22 +37,20 @@ type tokenResponse struct {
 
 func (kc *KeycloakClient) AuthenticateUserWithPassword(username, password string) (accessToken, idToken string, err error) {
 	params := map[string][]string{
-		"grant_type": {"password"},
-		"client_id":  {kc.clientID},
-		"scope":      {"openid"},
-		"username":   {username},
-		"password":   {password},
+		"grant_type":    {"password"},
+		"client_id":     {kc.clientID},
+		"client_secret": {kc.clientSecret},
+		"scope":         {"openid"},
+		"username":      {username},
+		"password":      {password},
 	}
-	if kc.clientSecret != "" {
-		params["client_secret"] = []string{kc.clientSecret}
-	}
-	resp, err := httputil.PostFormUrlencoded(kc.client, kc.oidc.Endpoint().AuthURL, nil, params)
+	resp, err := httputil.PostFormUrlencoded(kc.client, kc.oidc.Endpoint().TokenURL, nil, params)
 	if err != nil {
-		return "", "", err
+		return
 	}
 	tok := &tokenResponse{}
-	if err := httputil.DecodeJSONResponse(resp, tok); err != nil {
-		return "", "", err
+	if err = httputil.DecodeJSONResponse(resp, tok); err != nil {
+		return
 	}
 	return tok.AccessToken, tok.IDToken, nil
 }
@@ -118,7 +113,8 @@ func (kc *KeycloakClient) RequestRPT(accessToken string, request RPTRequest) (rp
 	if err != nil {
 		return "", err
 	}
-	resp, err := httputil.PostFormUrlencoded(kc.client, kc.oidc.Endpoint().AuthURL, func(r *http.Request) {
+	values.Set("grant_type", "urn:ietf:params:oauth:grant-type:uma-ticket")
+	resp, err := httputil.PostFormUrlencoded(kc.client, kc.oidc.Endpoint().TokenURL, func(r *http.Request) {
 		r.Header.Set("Authorization", "Bearer "+accessToken)
 	}, *values)
 	if err != nil {

@@ -1,14 +1,31 @@
 package uma
 
-import "strings"
+import (
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 
-type keycloakProvider struct {
+	"github.com/pckhoi/uma/pkg/httputil"
+)
+
+type KeycloakProvider struct {
 	*baseProvider
+	ownerManagedAccess bool
 }
 
-func (p *keycloakProvider) Realm() string {
-	path := strings.Split(p.Issuer, "/")
-	return path[len(path)-1]
+func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, client *http.Client, ownerManagedAccess bool) (p *KeycloakProvider, err error) {
+	p = &KeycloakProvider{
+		ownerManagedAccess: ownerManagedAccess,
+	}
+	p.baseProvider = newBaseProvider(issuer, clientID, clientSecret, keySet, &httputil.Client{
+		Client:        client,
+		Authenticator: p,
+	})
+	if err := p.discover(); err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 type kcError struct {
@@ -16,7 +33,73 @@ type kcError struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-func (p *keycloakProvider) RegisterResource(resource *Resource) (err error) {
+func (p *KeycloakProvider) CreateResource(resource *Resource) (id string, err error) {
 	resource.Description = ""
-	return p.baseProvider.RegisterResource(resource)
+	if p.ownerManagedAccess {
+		resource.OwnerManagedAccess = true
+	}
+	return p.baseProvider.CreateResource(resource)
+}
+
+func (p *KeycloakProvider) WWWAuthenticateDirectives() WWWAuthenticateDirectives {
+	path := strings.Split(p.issuer, "/")
+	return WWWAuthenticateDirectives{
+		Realm: path[len(path)-1],
+		AsUri: p.issuer,
+	}
+}
+
+type KcPermissionLogic string
+
+const (
+	KcPositive KcPermissionLogic = "POSITIVE"
+	KcNegative KcPermissionLogic = "NEGATIVE"
+)
+
+type KcPolicyDecisionStrategy string
+
+const (
+	KcUnanimous KcPolicyDecisionStrategy = "UNANIMOUS"
+)
+
+type KcPermission struct {
+	ID               string                   `json:"id,omitempty"`
+	Name             string                   `json:"name"`
+	Type             string                   `json:"type,omitempty"`
+	Description      string                   `json:"description,omitempty"`
+	Logic            KcPermissionLogic        `json:"logic,omitempty"`
+	DecisionStrategy KcPolicyDecisionStrategy `json:"decisionStrategy,omitempty"`
+	Scopes           []string                 `json:"scopes,omitempty"`
+	Roles            []string                 `json:"roles,omitempty"`
+	Groups           []string                 `json:"groups,omitempty"`
+	Clients          []string                 `json:"clients,omitempty"`
+}
+
+type kcCreatePermissionResponse struct {
+	ID string `json:"id"`
+}
+
+func (p *KeycloakProvider) CreatePermissionForResource(resourceID string, perm *KcPermission) (permissionID string, err error) {
+	respObj := &kcCreatePermissionResponse{}
+	if err = p.client.CreateObject(fmt.Sprintf("%s/%s", p.discovery.PolicyEndpoint, resourceID), perm, respObj); err != nil {
+		return "", err
+	}
+	perm.ID = respObj.ID
+	return respObj.ID, nil
+}
+
+func (p *KeycloakProvider) UpdatePermission(id string, perm *KcPermission) (err error) {
+	return p.client.UpdateObject(fmt.Sprintf("%s/%s", p.discovery.PolicyEndpoint, id), perm)
+}
+
+func (p *KeycloakProvider) DeletePermission(id string) (err error) {
+	return p.client.DeleteObject(fmt.Sprintf("%s/%s", p.discovery.PolicyEndpoint, id))
+}
+
+func (p *KeycloakProvider) ListPermissions(urlQuery url.Values) (ids []string, err error) {
+	ids = []string{}
+	if err = p.client.ListObjects(p.discovery.PolicyEndpoint, urlQuery, &ids); err != nil {
+		return
+	}
+	return ids, nil
 }
