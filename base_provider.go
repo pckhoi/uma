@@ -70,20 +70,15 @@ func (p *baseProvider) Authenticate(client *http.Client) (*httputil.ClientCreds,
 	return creds, nil
 }
 
-type createResourceResponse struct {
-	ID string `json:"_id"`
-}
-
-func (p *baseProvider) CreateResource(resource *Resource) (id string, err error) {
-	respObj := &createResourceResponse{}
-	if err = p.client.CreateObject(p.discovery.ResourceRegistrationEndpoint, resource, respObj); err != nil {
-		return "", err
+func (p *baseProvider) CreateResource(request *Resource) (response *ExpandedResource, err error) {
+	response = &ExpandedResource{}
+	if err = p.client.CreateObject(p.discovery.ResourceRegistrationEndpoint, request, response); err != nil {
+		return nil, err
 	}
-	resource.ID = respObj.ID
-	return respObj.ID, nil
+	return response, nil
 }
 
-func (p *baseProvider) GetResource(id string) (resource *Resource, err error) {
+func (p *baseProvider) GetResource(id string) (resource *ExpandedResource, err error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/%s", p.discovery.ResourceRegistrationEndpoint, id), nil)
 	if err != nil {
 		return nil, err
@@ -95,7 +90,7 @@ func (p *baseProvider) GetResource(id string) (resource *Resource, err error) {
 	if err = httputil.Ensure2XX(resp); err != nil {
 		return nil, err
 	}
-	resource = &Resource{}
+	resource = &ExpandedResource{}
 	if err = httputil.DecodeJSONResponse(resp, resource); err != nil {
 		return nil, err
 	}
@@ -135,11 +130,4 @@ func (p *baseProvider) CreatePermissionTicket(resourceID string, scopes ...strin
 		return "", err
 	}
 	return respObj.Ticket, nil
-}
-
-func (p *baseProvider) WWWAuthenticateDirectives() WWWAuthenticateDirectives {
-	return WWWAuthenticateDirectives{
-		Realm: "",
-		AsUri: p.issuer,
-	}
 }

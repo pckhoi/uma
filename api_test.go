@@ -110,9 +110,9 @@ func (a *mockAPI) RegisterResource(t *testing.T, path string) {
 	for _, tmpl := range a.rscTemplates {
 		rsc := tmpl.Match(a.types, a.baseURL, path)
 		if rsc != nil {
-			id, err := a.kp.CreateResource(rsc)
+			resp, err := a.kp.CreateResource(rsc)
 			require.NoError(t, err)
-			a.rscStore.Set(rsc.Name, id)
+			a.rscStore.Set(rsc.Name, resp.ID)
 			return
 		}
 	}

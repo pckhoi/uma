@@ -27,6 +27,31 @@ type WWWAuthenticateDirectives struct {
 	AsUri string
 }
 
+type ResourceOwner struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+type Scope struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+type ExpandedResource struct {
+	ID             string  `json:"_id,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Type           string  `json:"type,omitempty"`
+	Description    string  `json:"description,omitempty"`
+	IconUri        string  `json:"icon_uri,omitempty"`
+	ResourceScopes []Scope `json:"resource_scopes,omitempty"`
+	Scopes         []Scope `json:"scopes,omitempty"`
+
+	// Keycloak only fields
+	Owner              *ResourceOwner `json:"owner,omitempty"`
+	OwnerManagedAccess bool           `json:"ownerManagedAccess,omitempty"`
+	URIs               []string       `json:"uris,omitempty"`
+}
+
 type Provider interface {
 	KeySet
 
@@ -34,10 +59,10 @@ type Provider interface {
 	Authenticate(client *http.Client) (*httputil.ClientCreds, error)
 
 	// CreateResource creates resource
-	CreateResource(resource *Resource) (id string, err error)
+	CreateResource(request *Resource) (response *ExpandedResource, err error)
 
 	// GetResource gets resource by id
-	GetResource(id string) (resource *Resource, err error)
+	GetResource(id string) (resource *ExpandedResource, err error)
 
 	// UpdateResource updates resource by id
 	UpdateResource(id string, resource *Resource) (err error)

@@ -23,12 +23,12 @@ func (m *resourceMiddleware) createResource(p Provider, resource *Resource) (err
 		resource.ID = s
 		return nil
 	}
-	resourceID, err := p.CreateResource(resource)
+	resp, err := p.CreateResource(resource)
 	if err != nil {
 		return err
 	}
-	m.resourceStore.Set(resource.Name, resourceID)
-	resource.ID = resourceID
+	m.resourceStore.Set(resource.Name, resp.ID)
+	resource.ID = resp.ID
 	return nil
 }
 

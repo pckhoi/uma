@@ -33,12 +33,12 @@ type kcError struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-func (p *KeycloakProvider) CreateResource(resource *Resource) (id string, err error) {
-	resource.Description = ""
+func (p *KeycloakProvider) CreateResource(request *Resource) (response *ExpandedResource, err error) {
+	request.Description = ""
 	if p.ownerManagedAccess {
-		resource.OwnerManagedAccess = true
+		request.OwnerManagedAccess = true
 	}
-	return p.baseProvider.CreateResource(resource)
+	return p.baseProvider.CreateResource(request)
 }
 
 func (p *KeycloakProvider) WWWAuthenticateDirectives() WWWAuthenticateDirectives {
@@ -70,6 +70,7 @@ type KcPermission struct {
 	Logic            KcPermissionLogic        `json:"logic,omitempty"`
 	DecisionStrategy KcPolicyDecisionStrategy `json:"decisionStrategy,omitempty"`
 	Scopes           []string                 `json:"scopes,omitempty"`
+	Owner            string                   `json:"owner,omitempty"`
 	Roles            []string                 `json:"roles,omitempty"`
 	Groups           []string                 `json:"groups,omitempty"`
 	Clients          []string                 `json:"clients,omitempty"`
@@ -96,10 +97,10 @@ func (p *KeycloakProvider) DeletePermission(id string) (err error) {
 	return p.client.DeleteObject(fmt.Sprintf("%s/%s", p.discovery.PolicyEndpoint, id))
 }
 
-func (p *KeycloakProvider) ListPermissions(urlQuery url.Values) (ids []string, err error) {
-	ids = []string{}
-	if err = p.client.ListObjects(p.discovery.PolicyEndpoint, urlQuery, &ids); err != nil {
+func (p *KeycloakProvider) ListPermissions(urlQuery url.Values) (perms []KcPermission, err error) {
+	perms = []KcPermission{}
+	if err = p.client.ListObjects(p.discovery.PolicyEndpoint, urlQuery, &perms); err != nil {
 		return
 	}
-	return ids, nil
+	return perms, nil
 }
