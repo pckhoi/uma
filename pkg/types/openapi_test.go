@@ -10,88 +10,84 @@ import (
 )
 
 const yamlStr = `
+x-uma-resource-types:
+  https://example.co/rsrcs/users:
+    description: A list of users
+    iconUri: https://example.co/rsrcs/users/icon.png
+    resourceScopes:
+      - list
+  https://example.co/rsrcs/user:
+    description: A user
+    iconUri: https://example.co/rsrcs/user/icon.png
+    resourceScopes:
+      - read
+      - write
+x-uma-resource:
+  type: https://example.co/rsrcs/users
+  name: Users
 paths:
-  x-uma-resource:
-    type: https://example.co/rsrcs/users
-    name: Users
   /users:
-    get: {}
+    get: 
+      security:
+        - oidc: [read]
   /users/{id}:
     x-uma-resource:
       type: https://example.co/rsrcs/user
       name: "User {id}"
-    get: {}
+    get:
+      security:
+        - oidc: [read]
 components:
   securitySchemes:
-    oauth2:
-      type: oauth2
-      description: This API uses OAuth 2 with the authorization code flow.
-      flows:
-        authorizationCode:
-        authorizationUrl: "https://as.example.com/authorize"
-        tokenUrl: "https://as.example.com/token"
-        scopes:
-          read: Read data
-          write: Write data
-      list: List data
-      x-uma-resource-types:
-        https://example.co/rsrcs/users:
-          description: A list of users
-          iconUri: https://example.co/rsrcs/users/icon.png
-          resourceScopes:
-          - list
-        https://example.co/rsrcs/user:
-          description: A user
-          iconUri: https://example.co/rsrcs/user/icon.png
-          resourceScopes:
-          - read
-          - write
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: /.well-known/openid-configuration
+      x-uma-enabled: true
 `
 const jsonStr = `
 {
-	"paths": {
-	  "x-uma-resource": {
-		"type": "https://example.co/rsrcs/users",
-		"name": "Users"
+	"x-uma-resource-types": {
+	  "https://example.co/rsrcs/users": {
+		"description": "A list of users",
+		"iconUri": "https://example.co/rsrcs/users/icon.png",
+		"resourceScopes": ["list"]
 	  },
+	  "https://example.co/rsrcs/user": {
+		"description": "A user",
+		"iconUri": "https://example.co/rsrcs/user/icon.png",
+		"resourceScopes": ["read", "write"]
+	  }
+	},
+	"x-uma-resource": {
+	  "type": "https://example.co/rsrcs/users",
+	  "name": "Users"
+	},
+	"paths": {
 	  "/users": {
-		"get": {}
+		"get": {
+			"security": [
+				{"oidc": ["read"]}
+			]
+		}
 	  },
 	  "/users/{id}": {
 		"x-uma-resource": {
 		  "type": "https://example.co/rsrcs/user",
 		  "name": "User {id}"
 		},
-		"get": {}
+		"get": {
+			"security": [
+				{"oidc": ["read"]}
+			]
+		}
 	  }
 	},
 	"components": {
 	  "securitySchemes": {
-		"oauth2": {
-		  "type": "oauth2",
-		  "description": "This API uses OAuth 2 with the authorization code flow.",
-		  "flows": {
-			"authorizationCode": null,
-			"authorizationUrl": "https://as.example.com/authorize",
-			"tokenUrl": "https://as.example.com/token",
-			"scopes": {
-			  "read": "Read data",
-			  "write": "Write data",
-			  "list": "List data"
-			}
-		  },
-		  "x-uma-resource-types": {
-			"https://example.co/rsrcs/users": {
-			  "description": "A list of users",
-			  "iconUri": "https://example.co/rsrcs/users/icon.png",
-			  "resourceScopes": ["list"]
-			},
-			"https://example.co/rsrcs/user": {
-			  "description": "A user",
-			  "iconUri": "https://example.co/rsrcs/user/icon.png",
-			  "resourceScopes": ["read", "write"]
-			}
-		  }
+		"oidc": {
+		  "type": "openIdConnect",
+		  "openIdConnectUrl": "/.well-known/openid-configuration",
+		  "x-uma-enabled": true
 		}
 	  }
 	}
@@ -117,37 +113,51 @@ func TestOpenAPISpect(t *testing.T) {
 		{"oapi.json", jsonStr},
 	} {
 		assertUnmarshalSpec(t, c.Filename, c.Content, &OpenAPISpec{
-			Paths: &Paths{
-				UMAResouce: &UMAResouce{
-					Type:         "https://example.co/rsrcs/users",
-					NameTemplate: "Users",
+			UMAResourceTypes: map[string]UMAResourceType{
+				"https://example.co/rsrcs/user": {
+					Description:    "A user",
+					IconUri:        "https://example.co/rsrcs/user/icon.png",
+					ResourceScopes: []string{"read", "write"},
 				},
-				Paths: map[string]Path{
-					"/users": {},
-					"/users/{id}": {
-						UMAResouce: &UMAResouce{
-							Type:         "https://example.co/rsrcs/user",
-							NameTemplate: "User {id}",
+				"https://example.co/rsrcs/users": {
+					Description:    "A list of users",
+					IconUri:        "https://example.co/rsrcs/users/icon.png",
+					ResourceScopes: []string{"list"},
+				},
+			},
+			UMAResouce: &UMAResouce{
+				Type:         "https://example.co/rsrcs/users",
+				NameTemplate: "Users",
+			},
+			Paths: map[string]Path{
+				"/users": {
+					Get: &Operation{
+						Security: []map[string][]string{
+							{
+								"oidc": {"read"},
+							},
+						},
+					},
+				},
+				"/users/{id}": {
+					UMAResouce: &UMAResouce{
+						Type:         "https://example.co/rsrcs/user",
+						NameTemplate: "User {id}",
+					},
+					Get: &Operation{
+						Security: []map[string][]string{
+							{
+								"oidc": {"read"},
+							},
 						},
 					},
 				},
 			},
 			Components: &Components{
 				SecuritySchemes: map[string]SecurityScheme{
-					"oauth2": {
-						Type: "oauth2",
-						UMAResourceTypes: map[string]UMAResourceType{
-							"https://example.co/rsrcs/user": {
-								Description:    "A user",
-								IconUri:        "https://example.co/rsrcs/user/icon.png",
-								ResourceScopes: []string{"read", "write"},
-							},
-							"https://example.co/rsrcs/users": {
-								Description:    "A list of users",
-								IconUri:        "https://example.co/rsrcs/users/icon.png",
-								ResourceScopes: []string{"list"},
-							},
-						},
+					"oidc": {
+						Type:       "openIdConnect",
+						UMAEnabled: true,
 					},
 				},
 			},

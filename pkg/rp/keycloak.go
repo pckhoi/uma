@@ -23,7 +23,7 @@ func NewKeycloakClient(issuer, clientID, clientSecret string, client *http.Clien
 		client:       client,
 	}
 	var err error
-	kc.oidc, err = oidc.NewProvider(context.Background(), issuer)
+	kc.oidc, err = oidc.NewProvider(oidc.ClientContext(context.Background(), client), issuer)
 	if err != nil {
 		return nil, err
 	}

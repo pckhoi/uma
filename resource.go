@@ -44,3 +44,17 @@ func GetResource(r *http.Request) *Resource {
 	}
 	return nil
 }
+
+type scopesKey struct{}
+
+func setScopes(r *http.Request, scopes []string) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), scopesKey{}, scopes))
+}
+
+// GetScopes returns an UMAScopes if one was discovered by UMAResouceMiddleware
+func GetScopes(r *http.Request) []string {
+	if v := r.Context().Value(scopesKey{}); v != nil {
+		return v.([]string)
+	}
+	return nil
+}

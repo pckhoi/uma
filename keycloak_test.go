@@ -3,14 +3,41 @@ package uma_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"os"
 	"sort"
 	"testing"
 
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/dnaeon/go-vcr/v2/recorder"
 	"github.com/pckhoi/uma"
 	"github.com/pckhoi/uma/pkg/rp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func createKeycloakProvider(t *testing.T, client *http.Client) *uma.KeycloakProvider {
+	t.Helper()
+	issuer := "http://localhost:8080/realms/test-realm"
+	kp, err := uma.NewKeycloakProvider(
+		issuer, "test-client", "change-me",
+		oidc.NewRemoteKeySet(oidc.ClientContext(context.Background(), client), issuer+"/protocol/openid-connect/certs"),
+		client, true,
+	)
+	require.NoError(t, err)
+	return kp
+}
+
+func createKeycloakRPClient(t *testing.T, client *http.Client) *rp.KeycloakClient {
+	t.Helper()
+	kc, err := rp.NewKeycloakClient(
+		"http://localhost:8080/realms/test-realm",
+		"test-client-2", "change-me",
+		client,
+	)
+	require.NoError(t, err)
+	return kc
+}
 
 func assertIDsContains(t *testing.T, sl []string, id string) {
 	t.Helper()
@@ -35,6 +62,20 @@ func assertPermissionIDs(t *testing.T, perms []uma.KcPermission, ids ...string) 
 	}
 	sort.Strings(permIDs)
 	assert.Equal(t, ids, permIDs)
+}
+
+func recordHTTP(t *testing.T, name string, update bool) (client *http.Client, stop func() error) {
+	t.Helper()
+	fixture := "fixtures/go-vcr/" + name
+	if update {
+		os.Remove(fixture + ".yaml")
+	}
+	r, err := recorder.New(fixture)
+	require.NoError(t, err)
+	client = &http.Client{}
+	*client = *http.DefaultClient
+	client.Transport = r
+	return client, r.Stop
 }
 
 func TestKeycloakProvider(t *testing.T) {

@@ -51,70 +51,94 @@ func (s mockResourceStore) Get(name string) string {
 type mockAPI struct {
 	types           map[string]uma.ResourceType
 	baseURL         string
-	rscTemplates    uma.ResourceTemplates
 	rscStore        uma.ResourceStore
 	kp              *uma.KeycloakProvider
 	h               *handler
 	server          *httptest.Server
+	paths           []uma.Path
 	lastResource    *uma.Resource
 	userAccessToken map[string]string
+	securitySchemes map[string]struct{}
+	defaultRscTmpl  *uma.ResourceTemplate
 }
 
-func newMockAPI(t *testing.T, client *http.Client, types map[string]uma.ResourceType, rscTemplates uma.ResourceTemplates, basePath string, scopeMiddleware Middleware, includeScopeInPermission bool) *mockAPI {
+func stringSet(sl []string) map[string]struct{} {
+	m := map[string]struct{}{}
+	for _, s := range sl {
+		m[s] = struct{}{}
+	}
+	return m
+}
+
+func newMockAPI(
+	t *testing.T,
+	client *http.Client,
+	basePath string,
+	types map[string]uma.ResourceType,
+	securitySchemes []string,
+	defaultResource *uma.ResourceTemplate,
+	defaultSecurity uma.Security,
+	paths uma.Paths,
+	includeScopeInPermission bool,
+) *mockAPI {
+	sort.Sort(paths)
 	a := &mockAPI{
 		types:           types,
-		rscTemplates:    rscTemplates,
 		rscStore:        make(mockResourceStore),
 		kp:              createKeycloakProvider(t, client),
 		h:               &handler{},
+		paths:           paths,
 		userAccessToken: map[string]string{},
+		securitySchemes: stringSet(securitySchemes),
+		defaultRscTmpl:  defaultResource,
 	}
-	sort.Sort(sort.Reverse(rscTemplates))
 	a.h.onUMAResource = func(r *uma.Resource) {
 		a.lastResource = r
 	}
 	a.server = httptest.NewServer(a.h)
 	a.baseURL = a.server.URL + basePath
 	a.h.middlewares = []Middleware{
-		uma.ResourceMiddleware(uma.ResourceMiddlewareOptions{
-			GetBaseURL: func(r *http.Request) url.URL {
-				u, _ := url.Parse(a.baseURL)
-				return *u
-			},
-			GetProvider: func(r *http.Request) uma.Provider {
-				return a.kp
-			},
-			ResourceStore:     a.rscStore,
-			Types:             types,
-			ResourceTemplates: a.rscTemplates,
-			Client:            client,
-		}),
-	}
-	if scopeMiddleware != nil {
-		a.h.middlewares = append(a.h.middlewares,
-			scopeMiddleware,
-			uma.AuthorizeMiddleware(uma.AuthorizeMiddlewareOptions{
-				IncludeScopeInPermissionTicket: includeScopeInPermission,
+		uma.Middleware(
+			uma.MiddlewareOptions{
+				GetBaseURL: func(r *http.Request) url.URL {
+					u, _ := url.Parse(a.baseURL)
+					return *u
+				},
 				GetProvider: func(r *http.Request) uma.Provider {
 					return a.kp
 				},
-				DisableTokenExpirationCheck: true,
-			}),
-		)
+				ResourceStore:                  a.rscStore,
+				IncludeScopeInPermissionTicket: includeScopeInPermission,
+				DisableTokenExpirationCheck:    true,
+			},
+			types,
+			securitySchemes,
+			defaultResource,
+			defaultSecurity,
+			paths,
+		),
 	}
 	return a
 }
 
 func (a *mockAPI) RegisterResource(t *testing.T, path string) {
 	t.Helper()
-	for _, tmpl := range a.rscTemplates {
-		rsc := tmpl.Match(a.types, a.baseURL, path)
-		if rsc != nil {
-			resp, err := a.kp.CreateResource(rsc)
-			require.NoError(t, err)
-			a.rscStore.Set(rsc.Name, resp.ID)
-			return
+	var rsc *uma.Resource
+	var ok bool
+	for _, p := range a.paths {
+		rsc, ok = p.MatchPath(a.types, a.baseURL, path)
+		if ok {
+			if rsc == nil && a.defaultRscTmpl != nil {
+				rsc = a.defaultRscTmpl.CreateResource(a.types, a.baseURL+path, nil)
+			}
+			break
 		}
+	}
+	if rsc != nil {
+		resp, err := a.kp.CreateResource(rsc)
+		require.NoError(t, err)
+		a.rscStore.Set(rsc.Name, resp.ID)
+		return
 	}
 }
 
