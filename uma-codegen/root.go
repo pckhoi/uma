@@ -3,13 +3,14 @@ package main
 import (
 	"io"
 	"os"
+	"reflect"
+	"strings"
 
-	"github.com/pckhoi/uma/pkg/template"
 	"github.com/pckhoi/uma/pkg/types"
 	"github.com/spf13/cobra"
 )
 
-func rootCmd() *cobra.Command {
+func RootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "uma-codegen OPENAPI_DOC PACKAGE [-o OUTPUT]",
 		Short: "Generate code based on UMA extension in OpenAPI spec",
@@ -24,24 +25,56 @@ func rootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			typesMap := map[string]types.UMAResourceType{}
-			for _, ss := range doc.Components.SecuritySchemes {
-				if ss.Type == "oauth2" && ss.UMAResourceTypes != nil {
-					for k, v := range ss.UMAResourceTypes {
-						typesMap[k] = v
+
+			var securitySchemes []string
+			if doc.Components != nil {
+				for name, ss := range doc.Components.SecuritySchemes {
+					if ss.UMAEnabled {
+						securitySchemes = append(securitySchemes, name)
 					}
 				}
 			}
-			paths := map[string]types.UMAResouce{}
-			if doc.Paths.UMAResouce != nil {
-				paths[""] = *doc.Paths.UMAResouce
-			} else {
-				for k, v := range doc.Paths.Paths {
-					if v.UMAResouce != nil {
-						paths[k] = *v.UMAResouce
-					}
+
+			var rsc *resourceTemplate
+			if doc.UMAResouce != nil {
+				rsc = &resourceTemplate{
+					Name: doc.UMAResouce.NameTemplate,
+					Type: doc.UMAResouce.Type,
 				}
 			}
+
+			paths := []path{}
+			for name, p := range doc.Paths {
+				obj := path{
+					Path:       name,
+					Operations: map[string]operation{},
+				}
+				if p.UMAResouce != nil {
+					obj.ResourceName = p.UMAResouce.NameTemplate
+					obj.ResourceType = p.UMAResouce.Type
+				}
+				v := reflect.ValueOf(p)
+				vt := v.Type()
+				n := vt.NumField()
+				for i := 0; i < n; i++ {
+					sf := vt.FieldByIndex([]int{i})
+					if sf.Type.Kind() == reflect.Pointer && strings.HasSuffix(sf.Type.Elem().Name(), "Operation") {
+						f := v.FieldByIndex([]int{i})
+						if f.IsZero() {
+							continue
+						}
+						op := &operation{}
+						sec := f.Elem().FieldByName("Security")
+						if !sec.IsZero() {
+							op.Security = make([]map[string][]string, sec.Len())
+							reflect.Copy(reflect.ValueOf(op.Security), sec)
+						}
+						obj.Operations[strings.ToUpper(sf.Name)] = *op
+					}
+				}
+				paths = append(paths, obj)
+			}
+
 			var w io.Writer
 			if output == "" {
 				w = cmd.OutOrStdout()
@@ -53,7 +86,14 @@ func rootCmd() *cobra.Command {
 				defer f.Close()
 				w = f
 			}
-			return template.RenderMiddlewareCode(w, pkg, typesMap, paths)
+			return renderMiddlewareCode(w, middlewareTemplateData{
+				Package:                pkg,
+				EnabledSecuritySchemes: securitySchemes,
+				ResourceTypes:          doc.UMAResourceTypes,
+				DefaultResource:        rsc,
+				DefaultSecurity:        doc.Security,
+				Paths:                  paths,
+			})
 		},
 	}
 	cmd.Flags().StringP("output", "o", "", "output generated code to this file")

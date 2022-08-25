@@ -1,0 +1,91 @@
+openapi: "3.0.2"
+info:
+  title: Test API
+  version: "1.0"
+x-uma-resource-types:
+  https://www.example.com/rsrcs/users:
+    description: list of users
+    iconUri: https://www.example.com/rsrcs/users/icon.png
+    resourceScopes:
+      - read
+      - write
+  https://www.example.com/rsrcs/user:
+    description: a user
+    iconUri: https://www.example.com/rsrcs/user/icon.png
+    resourceScopes:
+      - read
+      - write
+x-uma-resource:
+  type: https://www.example.com/rsrcs/users
+  name: Users
+security:
+  - oidc: [read]
+paths:
+  /:
+    get:
+      summary: list users
+      responses:
+        "200":
+          $ref: "#/components/responses/users"
+    post:
+      summary: create a user
+      security:
+        - oidc: [write]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/user"
+      responses:
+        "200":
+          $ref: "#/components/responses/user"
+  /{id}:
+    x-uma-resource:
+      type: https://www.example.com/rsrcs/user
+      name: User {id}
+    get:
+      summary: get a user
+      responses:
+        "200":
+          $ref: "#/components/responses/user"
+    put:
+      summary: update a user
+      security:
+        - oidc: [write]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/user"
+      responses:
+        "200":
+          $ref: "#/components/responses/user"
+components:
+  schemas:
+    user:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+  responses:
+    users:
+      description: list of users
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/user"
+    user:
+      description: a user
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/user"
+  securitySchemes:
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: /.well-known/openid-configuration
+      x-uma-enabled: true

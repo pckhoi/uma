@@ -1,0 +1,52 @@
+package {{.Package}}
+
+import (
+    "net/http"
+
+    "github.com/pckhoi/uma"
+)
+
+var umaResourceTypes = map[string]uma.ResourceType{{`{`}}{{range $index, $element := .ResourceTypes}}
+    {{printf "%q" $index}}: {
+        Type: {{printf "%q" $index}},
+        Description: {{$element.Description | printf "%q"}},
+        IconUri: {{$element.IconUri | printf "%q"}},
+        ResourceScopes: []string{{`{`}}{{range $element.ResourceScopes}}{{printf "%q," .}}{{end}}},
+    },
+{{end}}}
+
+var umaSecuritySchemes = []string{
+    {{range $element := .EnabledSecuritySchemes}}{{printf "%q" $element}},{{end}}
+}
+
+var umaDefaultResource *uma.ResourceTemplate = {{if eq .DefaultResource nil}}nil{{else}}{{with .DefaultResource}}uma.NewResourceTemplate({{printf "%q" .Type}}, {{printf "%q" .Name}}){{end}}{{end}}
+
+var umaDefaultSecurity uma.Security = {{if eq .DefaultSecurity nil}}nil{{else}}{{with .DefaultSecurity}}[]map[string][]string{{`{`}}{{range $element := .}}
+    {{`{`}}{{range $name, $scopes := $element}}
+        {{printf "%q" $name}}: {{`{`}}{{range $scope := $scopes}}{{printf "%q" $scope}}{{end}}},
+    {{end}}},
+{{end}}}{{end}}{{end}}
+
+var umaPaths uma.Paths = []uma.Path{{`{`}}{{range $path := .Paths}}{{with $path}}
+    uma.NewPath({{printf "%q" .Path}}, {{if ne .ResourceType ""}}uma.NewResourceTemplate({{printf "%q" .ResourceType}}, {{printf "%q" .ResourceName}}){{else}}nil{{end}}, map[string]uma.Operation{{`{`}}{{range $method, $op := .Operations}}
+        {{printf "%q" $method}}: {{`{`}}{{if ne $op.Security nil}}
+            Security: []map[string][]string{{`{`}}{{range $element := $op.Security}}
+                {{`{`}}{{range $name, $scopes := $element}}
+                    {{printf "%q" $name}}: {{`{`}}{{range $scope := $scopes}}{{printf "%q" $scope}}{{end}}},
+                {{end}}},
+            {{end}}},
+        {{end}}},
+    {{end}}}),
+{{end}}{{end}}}
+
+// UMAMiddleware detects uma.Resource to be used in subsequent requests
+func UMAMiddleware(opts uma.MiddlewareOptions) func(next http.Handler) http.Handler {
+    return uma.Middleware(
+        opts,
+        umaResourceTypes,
+        umaSecuritySchemes,
+        umaDefaultResource,
+        umaDefaultSecurity,
+        umaPaths,
+    )
+}

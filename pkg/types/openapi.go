@@ -48,6 +48,7 @@ type Path struct {
 type OpenAPISpec struct {
 	UMAResourceTypes map[string]UMAResourceType `json:"x-uma-resource-types,omitempty" yaml:"x-uma-resource-types,omitempty"`
 	UMAResouce       *UMAResouce                `json:"x-uma-resource,omitempty" yaml:"x-uma-resource,omitempty"`
+	Security         []map[string][]string      `json:"security,omitempty" yaml:"security,omitempty"`
 	Paths            map[string]Path            `json:"paths,omitempty" yaml:"paths,omitempty"`
 	Components       *Components                `json:"components,omitempty" yaml:"components,omitempty"`
 }

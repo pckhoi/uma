@@ -66,7 +66,7 @@ func assertPermissionIDs(t *testing.T, perms []uma.KcPermission, ids ...string) 
 
 func recordHTTP(t *testing.T, name string, update bool) (client *http.Client, stop func() error) {
 	t.Helper()
-	fixture := "fixtures/go-vcr/" + name
+	fixture := "testdata/go-vcr/" + name
 	if update {
 		os.Remove(fixture + ".yaml")
 	}
