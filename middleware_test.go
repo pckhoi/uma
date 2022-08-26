@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pckhoi/uma"
+	"github.com/pckhoi/uma/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,55 +75,55 @@ func registerUserResources(t *testing.T, api *mockAPI) {
 }
 
 func TestMiddleware(t *testing.T) {
-	client, stop := recordHTTP(t, "test_middleware", false)
+	client, stop := testutil.RecordHTTP(t, "test_middleware", false)
 	defer stop()
 	api := mockUserAPI(t, client, true)
 	defer api.Stop(t)
 	registerUserResources(t, api)
 
-	kc := createKeycloakRPClient(t, client)
+	kc := testutil.CreateKeycloakRPClient(t, client)
 
-	api.AssertResponseStatus(t, http.MethodGet, "/abc", "", http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/abc", "", http.StatusOK)
 
-	rpt := api.AskForRPT(t, kc, "johnd", http.MethodGet, "/users", "")
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusOK)
+	rpt := testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users", "")
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusOK)
 
-	rpt = api.AskForRPT(t, kc, "johnd", http.MethodGet, "/users/1", rpt)
-	api.AssertResponseStatus(t, http.MethodGet, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodPost, "/users/1", rpt, http.StatusUnauthorized)
+	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users/1", rpt)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusUnauthorized)
 
-	rpt = api.AskForRPT(t, kc, "johnd", http.MethodPost, "/users/1", rpt)
-	api.AssertResponseStatus(t, http.MethodPost, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodGet, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusOK)
+	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodPost, api.server.URL+"/users/1", rpt)
+	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusOK)
 
-	rpt = api.AskForRPT(t, kc, "alice", http.MethodGet, "/users/1", "")
-	api.AssertResponseStatus(t, http.MethodGet, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusUnauthorized)
+	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "alice", http.MethodGet, api.server.URL+"/users/1", "")
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized)
 
-	api.AssertPermissionNotGranted(t, kc, "alice", http.MethodPost, "/users/1")
+	testutil.AssertPermissionNotGranted(t, kc, api.userAccessToken, "alice", http.MethodPost, api.server.URL+"/users/1")
 }
 
 func TestMiddlewareNoSpecificScope(t *testing.T) {
-	client, stop := recordHTTP(t, "test_middleware_no_specific_scope", false)
+	client, stop := testutil.RecordHTTP(t, "test_middleware_no_specific_scope", false)
 	defer stop()
 	api := mockUserAPI(t, client, false)
 	defer api.Stop(t)
 	registerUserResources(t, api)
 
-	kc := createKeycloakRPClient(t, client)
+	kc := testutil.CreateKeycloakRPClient(t, client)
 
-	rpt := api.AskForRPT(t, kc, "johnd", http.MethodGet, "/users", "")
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusOK)
+	rpt := testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users", "")
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusOK)
 
-	rpt = api.AskForRPT(t, kc, "johnd", http.MethodGet, "/users/1", "")
-	api.AssertResponseStatus(t, http.MethodGet, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodPost, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusUnauthorized)
+	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users/1", "")
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized)
 
-	rpt = api.AskForRPT(t, kc, "alice", http.MethodGet, "/users/1", "")
-	api.AssertResponseStatus(t, http.MethodGet, "/users/1", rpt, http.StatusOK)
-	api.AssertResponseStatus(t, http.MethodPost, "/users/1", rpt, http.StatusUnauthorized)
-	api.AssertResponseStatus(t, http.MethodGet, "/users", rpt, http.StatusUnauthorized)
+	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "alice", http.MethodGet, api.server.URL+"/users/1", "")
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusUnauthorized)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized)
 }

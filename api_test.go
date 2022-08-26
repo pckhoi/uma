@@ -4,13 +4,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"sort"
 	"testing"
 
 	"github.com/pckhoi/uma"
-	"github.com/pckhoi/uma/pkg/rp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -140,64 +137,6 @@ func (a *mockAPI) RegisterResource(t *testing.T, path string) {
 		a.rscStore.Set(rsc.Name, resp.ID)
 		return
 	}
-}
-
-func (a *mockAPI) AssertResponseStatus(t *testing.T, method, path, accessToken string, statusCode int) {
-	t.Helper()
-	req, err := http.NewRequest(method, a.server.URL+path, nil)
-	require.NoError(t, err)
-	if accessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	assert.Equal(t, statusCode, resp.StatusCode, "response has status %d instead of %d", resp.StatusCode, statusCode)
-}
-
-var authHeaderRegex = regexp.MustCompile(`UMA\s+realm="([^"]+)",\s+as_uri="([^"]+)",\s+ticket="([^"]+)"`)
-
-func extractTicketFrom401(t *testing.T, resp *http.Response) string {
-	t.Helper()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	matches := authHeaderRegex.FindStringSubmatch(resp.Header.Get("WWW-Authenticate"))
-	require.NotNil(t, matches)
-	return matches[3]
-}
-
-func (a *mockAPI) requestRPT(t *testing.T, kc *rp.KeycloakClient, username, method, path, rptToUpdate string) (rpt string, err error) {
-	t.Helper()
-	req, err := http.NewRequest(method, a.server.URL+path, nil)
-	require.NoError(t, err, "unable to create request")
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err, "unable to token-free request")
-	ticket := extractTicketFrom401(t, resp)
-	accessToken, ok := a.userAccessToken[username]
-	if !ok {
-		accessToken, _, err = kc.AuthenticateUserWithPassword(username, "password")
-		require.NoError(t, err, "unable to authenticate user")
-		a.userAccessToken[username] = accessToken
-		t.Logf("logged in user %q", username)
-	} else {
-		t.Logf("reuse access token for user %q", username)
-	}
-	return kc.RequestRPT(accessToken, rp.RPTRequest{
-		Ticket: ticket,
-		RPT:    rptToUpdate,
-	})
-}
-
-func (a *mockAPI) AskForRPT(t *testing.T, kc *rp.KeycloakClient, username, method, path, rptToUpdate string) (rpt string) {
-	t.Helper()
-	var err error
-	rpt, err = a.requestRPT(t, kc, username, method, path, rptToUpdate)
-	require.NoError(t, err)
-	return
-}
-
-func (a *mockAPI) AssertPermissionNotGranted(t *testing.T, kc *rp.KeycloakClient, username, method, path string) {
-	t.Helper()
-	_, err := a.requestRPT(t, kc, username, method, path, "")
-	assert.Error(t, err)
 }
 
 func (a *mockAPI) Stop(t *testing.T) {

@@ -114,8 +114,8 @@ func (p *baseProvider) ListResources(urlQuery url.Values) (ids []string, err err
 }
 
 type permissionRequest struct {
-	ResourceID     string   `json:"resource_id"`
-	ResourceScopes []string `json:"resource_scopes"`
+	ResourceID     string   `json:"resource_id,omitempty"`
+	ResourceScopes []string `json:"resource_scopes,omitempty"`
 }
 
 type permissionResponse struct {

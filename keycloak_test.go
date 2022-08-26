@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"sort"
 	"testing"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/dnaeon/go-vcr/v2/recorder"
 	"github.com/pckhoi/uma"
 	"github.com/pckhoi/uma/pkg/rp"
+	"github.com/pckhoi/uma/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,17 +25,6 @@ func createKeycloakProvider(t *testing.T, client *http.Client) *uma.KeycloakProv
 	)
 	require.NoError(t, err)
 	return kp
-}
-
-func createKeycloakRPClient(t *testing.T, client *http.Client) *rp.KeycloakClient {
-	t.Helper()
-	kc, err := rp.NewKeycloakClient(
-		"http://localhost:8080/realms/test-realm",
-		"test-client-2", "change-me",
-		client,
-	)
-	require.NoError(t, err)
-	return kc
 }
 
 func assertIDsContains(t *testing.T, sl []string, id string) {
@@ -64,25 +52,11 @@ func assertPermissionIDs(t *testing.T, perms []uma.KcPermission, ids ...string) 
 	assert.Equal(t, ids, permIDs)
 }
 
-func recordHTTP(t *testing.T, name string, update bool) (client *http.Client, stop func() error) {
-	t.Helper()
-	fixture := "testdata/go-vcr/" + name
-	if update {
-		os.Remove(fixture + ".yaml")
-	}
-	r, err := recorder.New(fixture)
-	require.NoError(t, err)
-	client = &http.Client{}
-	*client = *http.DefaultClient
-	client.Transport = r
-	return client, r.Stop
-}
-
 func TestKeycloakProvider(t *testing.T) {
-	client, stop := recordHTTP(t, "test_keycloak_provider", false)
+	client, stop := testutil.RecordHTTP(t, "test_keycloak_provider", false)
 	defer stop()
 	kp := createKeycloakProvider(t, client)
-	kc := createKeycloakRPClient(t, client)
+	kc := testutil.CreateKeycloakRPClient(t, client)
 	baseURL := "https://example.com"
 
 	rscReq1 := &uma.Resource{
