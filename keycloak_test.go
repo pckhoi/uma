@@ -126,7 +126,7 @@ func TestKeycloakProvider(t *testing.T) {
 	require.NoError(t, err)
 	b, err := kp.VerifySignature(context.Background(), rptStr)
 	require.NoError(t, err)
-	rpt := &uma.RPT{}
+	rpt := &uma.Claims{}
 	require.NoError(t, json.Unmarshal(b, rpt))
 	assert.Equal(t, rscResp2.ID, rpt.Authorization.Permissions[0].Rsid)
 	assert.Equal(t, "read", rpt.Authorization.Permissions[0].Scopes[0])

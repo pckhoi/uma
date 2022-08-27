@@ -94,38 +94,38 @@ func (m *middleware) askForTicket(w http.ResponseWriter, p Provider, resource *R
 	w.WriteHeader(http.StatusUnauthorized)
 }
 
-func (m *middleware) hasPermission(w http.ResponseWriter, r *http.Request, p Provider, rsc *Resource, scopes []string) bool {
+func (m *middleware) hasPermission(w http.ResponseWriter, r *http.Request, p Provider, rsc *Resource, scopes []string) (*Claims, bool) {
 	token := getBearerToken(r)
 	if token == "" {
 		m.askForTicket(w, p, rsc, scopes...)
-		return false
+		return nil, false
 	}
 	b, err := p.VerifySignature(r.Context(), token)
 	if err != nil {
 		panic(err)
 	}
-	rpt := &RPT{}
+	rpt := &Claims{}
 	if err = json.Unmarshal(b, rpt); err != nil {
 		panic(err)
 	}
 	if rpt.IsValid(rsc.ID, m.disableExpireCheck, scopes...) {
-		return true
+		return rpt, true
 	}
 	m.askForTicket(w, p, rsc, scopes...)
-	return false
+	return nil, false
 }
 
-func (m *middleware) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource, scopes []string, ok bool) {
+func (m *middleware) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource, scopes []string, claims *Claims, ok bool) {
 	rsc, scopes = m.matchOperation(r)
 	if rsc == nil || len(scopes) == 0 {
-		return nil, nil, true
+		return nil, nil, nil, true
 	}
 	p := m.getProvider(r)
 	m.registerResource(p, rsc)
-	if m.hasPermission(w, r, p, rsc, scopes) {
-		return rsc, scopes, true
+	if claims, ok := m.hasPermission(w, r, p, rsc, scopes); ok {
+		return rsc, scopes, claims, true
 	}
-	return nil, nil, false
+	return nil, nil, nil, false
 }
 
 type MiddlewareOptions struct {
@@ -169,12 +169,15 @@ func Middleware(
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if rsc, scopes, ok := m.enforce(w, r); ok {
+			if rsc, scopes, claims, ok := m.enforce(w, r); ok {
 				if rsc != nil {
 					r = setResource(r, rsc)
 				}
 				if scopes != nil {
 					r = setScopes(r, scopes)
+				}
+				if claims != nil {
+					r = setClaims(r, claims)
 				}
 				next.ServeHTTP(w, r)
 				return

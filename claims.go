@@ -1,6 +1,10 @@
 package uma
 
-import "time"
+import (
+	"context"
+	"net/http"
+	"time"
+)
 
 type Permission struct {
 	Rsid   string   `json:"rsid,omitempty"`
@@ -12,7 +16,7 @@ type Authorization struct {
 	Permissions []Permission `json:"permissions,omitempty"`
 }
 
-type RPT struct {
+type Claims struct {
 	Authorization     *Authorization `json:"authorization,omitempty"`
 	Email             string         `json:"email,omitempty"`
 	Name              string         `json:"name,omitempty"`
@@ -39,7 +43,7 @@ func stringSet(sl []string) map[string]struct{} {
 	return m
 }
 
-func (tok *RPT) IsValid(resourceID string, disableTokenExpirationCheck bool, scopes ...string) bool {
+func (tok *Claims) IsValid(resourceID string, disableTokenExpirationCheck bool, scopes ...string) bool {
 	if !disableTokenExpirationCheck {
 		iat := time.Unix(int64(tok.Iat), 0)
 		exp := time.Unix(int64(tok.Exp), 0)
@@ -60,4 +64,18 @@ func (tok *RPT) IsValid(resourceID string, disableTokenExpirationCheck bool, sco
 		}
 	}
 	return false
+}
+
+type claimsKey struct{}
+
+func setClaims(r *http.Request, ur *Claims) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), claimsKey{}, ur))
+}
+
+// GetClaims returns claims from Requesting Party Token
+func GetClaims(r *http.Request) *Claims {
+	if v := r.Context().Value(claimsKey{}); v != nil {
+		return v.(*Claims)
+	}
+	return nil
 }
