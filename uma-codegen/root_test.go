@@ -41,6 +41,7 @@ func startTestServer(t *testing.T, port int) (stop func()) {
 		for scanner.Scan() {
 			s := scanner.Text()
 			t.Logf("server stdout: %s", s)
+			fmt.Printf("server stdout: %s\n", s)
 			if s == "listening..." {
 				started <- true
 			}
@@ -52,6 +53,7 @@ func startTestServer(t *testing.T, port int) (stop func()) {
 		for scanner.Scan() {
 			s := scanner.Text()
 			t.Logf("server stderr: %s", s)
+			fmt.Printf("server stderr: %s\n", s)
 		}
 	}()
 	require.NoError(t, server.Start())

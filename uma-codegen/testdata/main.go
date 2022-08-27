@@ -48,8 +48,14 @@ func createKeycloakProvider(vcrDir string) (*uma.KeycloakProvider, func() error)
 	return kp, r.Stop
 }
 
-func wrappInMiddleware(kp uma.Provider, rs uma.ResourceStore, port string, handler http.Handler) http.Handler {
-	return UMAMiddleware(uma.MiddlewareOptions{
+func main() {
+	port := os.Args[1]
+	vcrDir := os.Args[2]
+	rs := make(mockResourceStore)
+	kp, stop := createKeycloakProvider(vcrDir)
+	defer stop()
+	sm := http.NewServeMux()
+	man := UMAManager(uma.ManagerOptions{
 		GetBaseURL: func(r *http.Request) url.URL {
 			return url.URL{
 				Scheme: "http",
@@ -60,19 +66,10 @@ func wrappInMiddleware(kp uma.Provider, rs uma.ResourceStore, port string, handl
 		GetProvider: func(r *http.Request) uma.Provider {
 			return kp
 		},
-		ResourceStore:                  rs,
-		DisableTokenExpirationCheck:    true,
-		IncludeScopeInPermissionTicket: true,
-	})(handler)
-}
-
-func main() {
-	port := os.Args[1]
-	vcrDir := os.Args[2]
-	rs := make(mockResourceStore)
-	kp, stop := createKeycloakProvider(vcrDir)
-	defer stop()
-	sm := http.NewServeMux()
+		ResourceStore:                   rs,
+		DisableTokenExpirationCheck:     true,
+		IncludeScopesInPermissionTicket: true,
+	})
 	sm.HandleFunc("/register-resources", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := kp.CreateResource(&uma.Resource{
 			ResourceType: uma.ResourceType{
@@ -146,7 +143,7 @@ func main() {
 	})
 	s := &http.Server{
 		Addr:    "localhost:" + port,
-		Handler: wrappInMiddleware(kp, rs, port, sm),
+		Handler: man.Middleware(sm),
 	}
 	fmt.Println("listening...")
 	if err := s.ListenAndServe(); err != nil {

@@ -1,8 +1,6 @@
 package {{.Package}}
 
 import (
-    "net/http"
-
     "github.com/pckhoi/uma"
 )
 
@@ -39,9 +37,9 @@ var umaPaths uma.Paths = []uma.Path{{`{`}}{{range $path := .Paths}}{{with $path}
     {{end}}}),
 {{end}}{{end}}}
 
-// UMAMiddleware detects uma.Resource to be used in subsequent requests
-func UMAMiddleware(opts uma.MiddlewareOptions) func(next http.Handler) http.Handler {
-    return uma.Middleware(
+// UMAManager returns an uma.Manager instance configured according to OpenAPI schema
+func UMAManager(opts uma.ManagerOptions) *uma.Manager {
+    return uma.New(
         opts,
         umaResourceTypes,
         umaSecuritySchemes,

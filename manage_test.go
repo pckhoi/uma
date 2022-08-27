@@ -6,6 +6,7 @@ import (
 
 	"github.com/pckhoi/uma"
 	"github.com/pckhoi/uma/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -87,6 +88,41 @@ func TestMiddleware(t *testing.T) {
 
 	rpt := testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users", "")
 	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusOK)
+	assert.Equal(t, &uma.Resource{
+		ResourceType: uma.ResourceType{
+			Type:           "users",
+			IconUri:        "https://example.com/rsrcs/users.png",
+			ResourceScopes: []string{"read"},
+		},
+		ID:   "f2bbda3a-76ad-411a-92bc-1bc21a2a60a0",
+		Name: "Users",
+		URI:  api.server.URL + "/users",
+	}, api.lastResource)
+	assert.Equal(t, []string{"read"}, api.lastScopes)
+	assert.Equal(t, &uma.Claims{
+		Authorization: &uma.Authorization{
+			Permissions: []uma.Permission{
+				{
+					Rsid:   "f2bbda3a-76ad-411a-92bc-1bc21a2a60a0",
+					Rsname: "Users",
+					Scopes: []string{"read"},
+				},
+			},
+		},
+		Email:             "john.doe@example.com",
+		Name:              "John Doe",
+		GivenName:         "John",
+		FamilyName:        "Doe",
+		PreferredUsername: "johnd",
+		Aud:               "test-client",
+		Sid:               "4605692f-c7f2-4b0f-b285-7976dbe6997c",
+		Jti:               "0e4dd304-7dee-40ef-baad-31fb90aa46e0",
+		Exp:               1661483516,
+		Iat:               1661483216,
+		Sub:               "3461cf5b-12e5-49a9-8ca8-656375411ca3",
+		Typ:               "Bearer",
+		Azp:               "test-client-2",
+	}, api.lastClaims)
 
 	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users/1", rpt)
 	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)

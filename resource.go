@@ -37,7 +37,7 @@ func setResource(r *http.Request, ur *Resource) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), resourceKey{}, ur))
 }
 
-// GetResource returns an UMAResource if one was discovered by UMAResouceMiddleware
+// GetResource returns an uma Resource if one is found by Manager.Middleware
 func GetResource(r *http.Request) *Resource {
 	if v := r.Context().Value(resourceKey{}); v != nil {
 		return v.(*Resource)
@@ -51,7 +51,7 @@ func setScopes(r *http.Request, scopes []string) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), scopesKey{}, scopes))
 }
 
-// GetScopes returns an UMAScopes if one was discovered by UMAResouceMiddleware
+// GetScopes returns uma scopes if they are found by Manager.Middleware
 func GetScopes(r *http.Request) []string {
 	if v := r.Context().Value(scopesKey{}); v != nil {
 		return v.([]string)

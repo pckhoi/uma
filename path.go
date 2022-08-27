@@ -26,9 +26,12 @@ func NewResourceTemplate(rscType, rscNameTmpl string) *ResourceTemplate {
 
 func (t *ResourceTemplate) CreateResource(types map[string]ResourceType, uri string, params map[string]string) (rsc *Resource) {
 	uri = strings.TrimSuffix(uri, "/")
-	name := t.nameTmpl
-	for k, v := range params {
-		name = strings.ReplaceAll(name, fmt.Sprintf("{%s}", k), v)
+	var name string
+	if t.nameTmpl != "" {
+		name = t.nameTmpl
+		for k, v := range params {
+			name = strings.ReplaceAll(name, fmt.Sprintf("{%s}", k), v)
+		}
 	}
 	rsc = &Resource{
 		ResourceType: types[t._type],
@@ -96,12 +99,11 @@ func (p *Path) MatchPath(types map[string]ResourceType, baseURL, path string) (r
 	return
 }
 
-func (p *Path) Match(types map[string]ResourceType, securitySchemes map[string]struct{}, baseURL, path, method string) (rsc *Resource, scopes []string, match bool) {
-	rsc, match = p.MatchPath(types, baseURL, path)
+func (p *Path) FindScopes(securitySchemes map[string]struct{}, method string) (scopes []string) {
 	if op, ok := p.operations[method]; ok {
-		scopes = op.Security.findScopes(securitySchemes)
+		return op.Security.findScopes(securitySchemes)
 	}
-	return
+	return nil
 }
 
 type Paths []Path

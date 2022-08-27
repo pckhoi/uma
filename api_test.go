@@ -14,14 +14,14 @@ import (
 type Middleware func(next http.Handler) http.Handler
 
 type handler struct {
-	middlewares   []Middleware
-	onUMAResource func(r *uma.Resource)
+	middlewares []Middleware
+	onRequest   func(r *http.Request)
 }
 
 func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	var o http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h.onUMAResource != nil {
-			h.onUMAResource(uma.GetResource(r))
+		if h.onRequest != nil {
+			h.onRequest(r)
 		}
 		w.WriteHeader(http.StatusOK)
 	})
@@ -54,9 +54,12 @@ type mockAPI struct {
 	server          *httptest.Server
 	paths           []uma.Path
 	lastResource    *uma.Resource
+	lastScopes      []string
+	lastClaims      *uma.Claims
 	userAccessToken map[string]string
 	securitySchemes map[string]struct{}
 	defaultRscTmpl  *uma.ResourceTemplate
+	man             *uma.Manager
 }
 
 func stringSet(sl []string) map[string]struct{} {
@@ -89,32 +92,33 @@ func newMockAPI(
 		securitySchemes: stringSet(securitySchemes),
 		defaultRscTmpl:  defaultResource,
 	}
-	a.h.onUMAResource = func(r *uma.Resource) {
-		a.lastResource = r
+	a.h.onRequest = func(r *http.Request) {
+		a.lastResource = uma.GetResource(r)
+		a.lastClaims = uma.GetClaims(r)
+		a.lastScopes = uma.GetScopes(r)
 	}
 	a.server = httptest.NewServer(a.h)
 	a.baseURL = a.server.URL + basePath
-	a.h.middlewares = []Middleware{
-		uma.Middleware(
-			uma.MiddlewareOptions{
-				GetBaseURL: func(r *http.Request) url.URL {
-					u, _ := url.Parse(a.baseURL)
-					return *u
-				},
-				GetProvider: func(r *http.Request) uma.Provider {
-					return a.kp
-				},
-				ResourceStore:                  a.rscStore,
-				IncludeScopeInPermissionTicket: includeScopeInPermission,
-				DisableTokenExpirationCheck:    true,
+	a.man = uma.New(
+		uma.ManagerOptions{
+			GetBaseURL: func(r *http.Request) url.URL {
+				u, _ := url.Parse(a.baseURL)
+				return *u
 			},
-			types,
-			securitySchemes,
-			defaultResource,
-			defaultSecurity,
-			paths,
-		),
-	}
+			GetProvider: func(r *http.Request) uma.Provider {
+				return a.kp
+			},
+			ResourceStore:                   a.rscStore,
+			IncludeScopesInPermissionTicket: includeScopeInPermission,
+			DisableTokenExpirationCheck:     true,
+		},
+		types,
+		securitySchemes,
+		defaultResource,
+		defaultSecurity,
+		paths,
+	)
+	a.h.middlewares = []Middleware{a.man.Middleware}
 	return a
 }
 
