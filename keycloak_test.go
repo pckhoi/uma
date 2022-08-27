@@ -21,7 +21,7 @@ func createKeycloakProvider(t *testing.T, client *http.Client) *uma.KeycloakProv
 	kp, err := uma.NewKeycloakProvider(
 		issuer, "test-client", "change-me",
 		oidc.NewRemoteKeySet(oidc.ClientContext(context.Background(), client), issuer+"/protocol/openid-connect/certs"),
-		client, true,
+		uma.WithKeycloakClient(client), uma.WithKeycloakOwnerManagedAccess(),
 	)
 	require.NoError(t, err)
 	return kp

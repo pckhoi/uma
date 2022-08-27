@@ -12,14 +12,35 @@ import (
 type KeycloakProvider struct {
 	*baseProvider
 	ownerManagedAccess bool
+	_client            *http.Client
 }
 
-func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, client *http.Client, ownerManagedAccess bool) (p *KeycloakProvider, err error) {
+type KeycloakOption func(kp *KeycloakProvider)
+
+// WithKeycloakClient directs KeycloakProvider to use a custom http client
+func WithKeycloakClient(client *http.Client) KeycloakOption {
+	return func(kp *KeycloakProvider) {
+		kp._client = client
+	}
+}
+
+// WithKeycloakOwnerManagedAccess sets ownerManagedAccess for each resource to true
+// during resource creation
+func WithKeycloakOwnerManagedAccess() KeycloakOption {
+	return func(kp *KeycloakProvider) {
+		kp.ownerManagedAccess = true
+	}
+}
+
+func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, opts ...KeycloakOption) (p *KeycloakProvider, err error) {
 	p = &KeycloakProvider{
-		ownerManagedAccess: ownerManagedAccess,
+		_client: http.DefaultClient,
+	}
+	for _, opt := range opts {
+		opt(p)
 	}
 	p.baseProvider = newBaseProvider(issuer, clientID, clientSecret, keySet, &httputil.Client{
-		Client:        client,
+		Client:        p._client,
 		Authenticator: p,
 	})
 	if err := p.discover(); err != nil {

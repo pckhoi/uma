@@ -9,8 +9,14 @@ import (
 	"strings"
 )
 
+// ResourceStore persists resource name and id as registered with the provider
 type ResourceStore interface {
+	// Set resource id associated with given name
 	Set(name, id string)
+
+	// Get resource id associated with given name. If this function returns
+	// empty string, the Manager creates a new resource, registers it with the
+	// provider, and persists the id using Set
 	Get(name string) (id string)
 }
 

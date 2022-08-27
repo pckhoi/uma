@@ -40,7 +40,7 @@ func createKeycloakProvider(vcrDir string) (*uma.KeycloakProvider, func() error)
 	kp, err := uma.NewKeycloakProvider(
 		issuer, "test-client", "change-me",
 		oidc.NewRemoteKeySet(oidc.ClientContext(context.Background(), client), issuer+"/protocol/openid-connect/certs"),
-		client, true,
+		uma.WithKeycloakClient(client), uma.WithKeycloakOwnerManagedAccess(),
 	)
 	if err != nil {
 		log.Fatal(err)
