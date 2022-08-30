@@ -16,16 +16,17 @@ import (
 
 type mockResourceStore map[string]string
 
-func (s mockResourceStore) Set(name, id string) {
+func (s mockResourceStore) Set(name, id string) error {
 	s[name] = id
+	return nil
 }
 
-func (s mockResourceStore) Get(name string) string {
+func (s mockResourceStore) Get(name string) (string, error) {
 	id, ok := s[name]
 	if !ok {
-		return ""
+		return "", nil
 	}
-	return id
+	return id, nil
 }
 
 func createKeycloakProvider(vcrDir string) (*uma.KeycloakProvider, func() error) {

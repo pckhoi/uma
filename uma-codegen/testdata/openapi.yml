@@ -60,6 +60,15 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/user"
+  /no-security:
+    get:
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              example: OK
 components:
   schemas:
     user:

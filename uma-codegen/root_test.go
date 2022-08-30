@@ -102,4 +102,6 @@ func TestRootCmd(t *testing.T) {
 	testutil.AssertResponseStatus(t, http.MethodPost, baseURL+"/users", rpt, http.StatusOK)
 	testutil.AssertResponseStatus(t, http.MethodGet, baseURL+"/users/1", rpt, http.StatusOK)
 	testutil.AssertResponseStatus(t, http.MethodPut, baseURL+"/users/1", rpt, http.StatusOK)
+
+	testutil.AssertResponseStatus(t, http.MethodGet, baseURL+"/no-security", "", http.StatusOK)
 }
