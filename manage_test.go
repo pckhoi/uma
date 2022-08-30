@@ -48,17 +48,17 @@ func mockUserAPI(t *testing.T, client *http.Client, includeScopeInPermission boo
 
 func registerUserResources(t *testing.T, api *mockAPI) {
 	t.Helper()
-	api.RegisterResource(t, "/")
-	api.RegisterResource(t, "/1")
+	idUsers := api.RegisterResource(t, "/")
+	idUser1 := api.RegisterResource(t, "/1")
 	for _, role := range []string{"reader", "writer"} {
-		_, err := api.kp.CreatePermissionForResource(api.rscStore.Get("Users"), &uma.KcPermission{
+		_, err := api.kp.CreatePermissionForResource(idUsers, &uma.KcPermission{
 			Name:        role + "-read-users",
 			Description: role + " can read users",
 			Scopes:      []string{"read"},
 			Roles:       []string{role},
 		})
 		require.NoError(t, err)
-		_, err = api.kp.CreatePermissionForResource(api.rscStore.Get("User 1"), &uma.KcPermission{
+		_, err = api.kp.CreatePermissionForResource(idUser1, &uma.KcPermission{
 			Name:        role + "-read-user",
 			Description: role + " can read user",
 			Scopes:      []string{"read"},
@@ -66,7 +66,7 @@ func registerUserResources(t *testing.T, api *mockAPI) {
 		})
 		require.NoError(t, err)
 	}
-	_, err := api.kp.CreatePermissionForResource(api.rscStore.Get("User 1"), &uma.KcPermission{
+	_, err := api.kp.CreatePermissionForResource(idUser1, &uma.KcPermission{
 		Name:        "writer-write-user",
 		Description: "Writers can write user",
 		Scopes:      []string{"write"},

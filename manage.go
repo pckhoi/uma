@@ -12,12 +12,12 @@ import (
 // ResourceStore persists resource name and id as registered with the provider
 type ResourceStore interface {
 	// Set resource id associated with given name
-	Set(name, id string)
+	Set(name, id string) error
 
 	// Get resource id associated with given name. If this function returns
 	// empty string, the Manager creates a new resource, registers it with the
 	// provider, and persists the id using Set
-	Get(name string) (id string)
+	Get(name string) (id string, err error)
 }
 
 type Manager struct {
@@ -32,6 +32,7 @@ type Manager struct {
 	defaultRscTmpl     *ResourceTemplate
 	defaultSecurity    Security
 	getResourceName    func(rsc Resource) string
+	localEnforce       func(r *http.Request, resource Resource, scopes []string) bool
 }
 
 type ManagerOptions struct {
@@ -61,6 +62,11 @@ type ManagerOptions struct {
 	// name is to define name template for the resource (x-uma-resource.name) in the OpenAPI spec. This method
 	// should only be used when that is not possible.
 	GetResourceName func(rsc Resource) string
+
+	// LocalEnforce handler if defined, cut the UMA provider out of the flow entirely, and allows deciding access
+	// based on a local access control list. If the handler return true, allow the request to come through.
+	// Otherwise, responds with 401.
+	LocalEnforce func(r *http.Request, resource Resource, scopes []string) bool
 }
 
 func New(
@@ -84,6 +90,7 @@ func New(
 		defaultRscTmpl:     defaultResource,
 		defaultSecurity:    defaultSecurity,
 		getResourceName:    opts.GetResourceName,
+		localEnforce:       opts.LocalEnforce,
 	}
 }
 
@@ -113,6 +120,7 @@ func (m *Manager) matchPath(baseURL url.URL, path string) (*Resource, *Path) {
 
 func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []string) {
 	baseURL := m.getBaseURL(r)
+	baseURL.Path = strings.TrimSuffix(baseURL.Path, "/")
 	rsc, p := m.matchPath(baseURL, r.URL.Path)
 	if rsc == nil {
 		return
@@ -125,7 +133,9 @@ func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []strin
 }
 
 func (m *Manager) registerResource(p Provider, rsc *Resource) error {
-	if s := m.resourceStore.Get(rsc.Name); s != "" {
+	if s, err := m.resourceStore.Get(rsc.Name); err != nil {
+		return err
+	} else if s != "" {
 		rsc.ID = s
 		return nil
 	}
@@ -133,7 +143,9 @@ func (m *Manager) registerResource(p Provider, rsc *Resource) error {
 	if err != nil {
 		return err
 	}
-	m.resourceStore.Set(rsc.Name, resp.ID)
+	if err := m.resourceStore.Set(rsc.Name, resp.ID); err != nil {
+		return err
+	}
 	rsc.ID = resp.ID
 	return nil
 }
@@ -204,6 +216,13 @@ func (m *Manager) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource
 	rsc, scopes = m.matchOperation(r)
 	if rsc == nil || len(scopes) == 0 {
 		return nil, nil, nil, true
+	}
+	if m.localEnforce != nil {
+		ok = m.localEnforce(r, *rsc, scopes)
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+		return
 	}
 	p := m.getProvider(r)
 	if err := m.registerResource(p, rsc); err != nil {

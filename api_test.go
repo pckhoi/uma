@@ -33,16 +33,17 @@ func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 type mockResourceStore map[string]string
 
-func (s mockResourceStore) Set(name, id string) {
+func (s mockResourceStore) Set(name, id string) error {
 	s[name] = id
+	return nil
 }
 
-func (s mockResourceStore) Get(name string) string {
+func (s mockResourceStore) Get(name string) (string, error) {
 	id, ok := s[name]
 	if !ok {
-		return ""
+		return "", nil
 	}
-	return id
+	return id, nil
 }
 
 type mockAPI struct {
@@ -122,7 +123,7 @@ func newMockAPI(
 	return a
 }
 
-func (a *mockAPI) RegisterResource(t *testing.T, path string) {
+func (a *mockAPI) RegisterResource(t *testing.T, path string) (id string) {
 	t.Helper()
 	var rsc *uma.Resource
 	var ok bool
@@ -139,8 +140,9 @@ func (a *mockAPI) RegisterResource(t *testing.T, path string) {
 		resp, err := a.kp.CreateResource(rsc)
 		require.NoError(t, err)
 		a.rscStore.Set(rsc.Name, resp.ID)
-		return
+		return resp.ID
 	}
+	return ""
 }
 
 func (a *mockAPI) Stop(t *testing.T) {
