@@ -102,8 +102,9 @@ type kcCreatePermissionResponse struct {
 }
 
 func (p *KeycloakProvider) CreatePermissionForResource(resourceID string, perm *KcPermission) (permissionID string, err error) {
+	path := fmt.Sprintf("%s/%s", p.discovery.PolicyEndpoint, resourceID)
 	respObj := &kcCreatePermissionResponse{}
-	if err = p.client.CreateObject(fmt.Sprintf("%s/%s", p.discovery.PolicyEndpoint, resourceID), perm, respObj); err != nil {
+	if err = p.client.CreateObject(path, perm, respObj); err != nil {
 		return "", err
 	}
 	perm.ID = respObj.ID

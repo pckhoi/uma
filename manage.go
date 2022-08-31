@@ -196,7 +196,8 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 	}
 	b, err := p.VerifySignature(r.Context(), token)
 	if err != nil {
-		panic(err)
+		m.askForTicket(w, p, rsc, scopes...)
+		return nil, false
 	}
 	rpt := &Claims{}
 	if err = json.Unmarshal(b, rpt); err != nil {
