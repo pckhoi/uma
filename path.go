@@ -44,6 +44,9 @@ func (t *ResourceTemplate) CreateResource(types map[string]ResourceType, uri str
 type Security []map[string][]string
 
 func (s Security) findScopes(securitySchemes map[string]struct{}) (scopes []string) {
+	if s == nil {
+		return nil
+	}
 	for _, r := range s {
 		for k, sl := range r {
 			if _, ok := securitySchemes[k]; ok {
@@ -51,7 +54,7 @@ func (s Security) findScopes(securitySchemes map[string]struct{}) (scopes []stri
 			}
 		}
 	}
-	return nil
+	return []string{}
 }
 
 type Operation struct {

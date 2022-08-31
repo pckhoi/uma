@@ -67,7 +67,9 @@ func main() {
 		GetProvider: func(r *http.Request) uma.Provider {
 			return kp
 		},
-		ResourceStore:                   rs,
+		GetResourceStore: func(r *http.Request) uma.ResourceStore {
+			return rs
+		},
 		DisableTokenExpirationCheck:     true,
 		IncludeScopesInPermissionTicket: true,
 	})

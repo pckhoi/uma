@@ -109,7 +109,9 @@ func newMockAPI(
 			GetProvider: func(r *http.Request) uma.Provider {
 				return a.kp
 			},
-			ResourceStore:                   a.rscStore,
+			GetResourceStore: func(r *http.Request) uma.ResourceStore {
+				return a.rscStore
+			},
 			IncludeScopesInPermissionTicket: includeScopeInPermission,
 			DisableTokenExpirationCheck:     true,
 		},

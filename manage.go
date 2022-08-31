@@ -23,7 +23,7 @@ type ResourceStore interface {
 type Manager struct {
 	getBaseURL         func(r *http.Request) url.URL
 	getProvider        func(r *http.Request) Provider
-	resourceStore      ResourceStore
+	getResourceStore   func(r *http.Request) ResourceStore
 	includeScopes      bool
 	disableExpireCheck bool
 	paths              []Path
@@ -44,10 +44,9 @@ type ManagerOptions struct {
 	// providers for different requests if you so wish
 	GetProvider func(r *http.Request) Provider
 
-	// ResourceStore persistently stores resource name and id. Some UMA providers don't like to be told
-	// twice about the same resource. This tells the middleware which resource is already registered so
-	// it doesn't have to be registered again.
-	ResourceStore ResourceStore
+	// ResourceStore persistently stores resource name and id. This tells the middleware which resource
+	// is already registered so it doesn't have to be registered again.
+	GetResourceStore func(r *http.Request) ResourceStore
 
 	// Includes scopes in permission ticket in order to be granted specific scopes (the currently needed scopes)
 	// on a resource. If scopes are not included, the authorization server might decides to grant all scopes
@@ -81,7 +80,7 @@ func New(
 	return &Manager{
 		getBaseURL:         opts.GetBaseURL,
 		getProvider:        opts.GetProvider,
-		resourceStore:      opts.ResourceStore,
+		getResourceStore:   opts.GetResourceStore,
 		includeScopes:      opts.IncludeScopesInPermissionTicket,
 		disableExpireCheck: opts.DisableTokenExpirationCheck,
 		types:              types,
@@ -132,8 +131,8 @@ func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []strin
 	return
 }
 
-func (m *Manager) registerResource(p Provider, rsc *Resource) error {
-	if s, err := m.resourceStore.Get(rsc.Name); err != nil {
+func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) error {
+	if s, err := rs.Get(rsc.Name); err != nil {
 		return err
 	} else if s != "" {
 		rsc.ID = s
@@ -143,7 +142,7 @@ func (m *Manager) registerResource(p Provider, rsc *Resource) error {
 	if err != nil {
 		return err
 	}
-	if err := m.resourceStore.Set(rsc.Name, resp.ID); err != nil {
+	if err := rs.Set(rsc.Name, resp.ID); err != nil {
 		return err
 	}
 	rsc.ID = resp.ID
@@ -152,12 +151,12 @@ func (m *Manager) registerResource(p Provider, rsc *Resource) error {
 
 // RegisterResourceAt finds resource at path. If one is found, it registers the resource with the provider.
 // If a resource is not found, both rsc and err are nil.
-func (m *Manager) RegisterResourceAt(p Provider, baseURL url.URL, path string) (rsc *Resource, err error) {
+func (m *Manager) RegisterResourceAt(rs ResourceStore, p Provider, baseURL url.URL, path string) (rsc *Resource, err error) {
 	rsc, _ = m.matchPath(baseURL, path)
 	if rsc == nil {
 		return
 	}
-	if err := m.registerResource(p, rsc); err != nil {
+	if err := m.registerResource(rs, p, rsc); err != nil {
 		return nil, err
 	}
 	return rsc, nil
@@ -225,7 +224,8 @@ func (m *Manager) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource
 		return
 	}
 	p := m.getProvider(r)
-	if err := m.registerResource(p, rsc); err != nil {
+	rs := m.getResourceStore(r)
+	if err := m.registerResource(rs, p, rsc); err != nil {
 		panic(err)
 	}
 	if claims, ok := m.hasPermission(w, r, p, rsc, scopes); ok {
