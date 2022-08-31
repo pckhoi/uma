@@ -132,9 +132,7 @@ func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []strin
 }
 
 func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) error {
-	if s, err := rs.Get(rsc.Name); err != nil {
-		return err
-	} else if s != "" {
+	if s, err := rs.Get(rsc.Name); err == nil && s != "" {
 		rsc.ID = s
 		return nil
 	}
