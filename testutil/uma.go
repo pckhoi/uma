@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"io"
 	"net/http"
 	"regexp"
 	"testing"
@@ -10,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func AssertResponseStatus(t *testing.T, method, uri, accessToken string, statusCode int) {
+func DoRequest(t *testing.T, method, uri, accessToken string) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(method, uri, nil)
 	require.NoError(t, err)
@@ -19,6 +20,23 @@ func AssertResponseStatus(t *testing.T, method, uri, accessToken string, statusC
 	}
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
+	return resp
+}
+
+func AssertResponse(t *testing.T, method, uri, accessToken string, statusCode int, contentType, content string) {
+	t.Helper()
+	resp := DoRequest(t, method, uri, accessToken)
+	assert.Equal(t, statusCode, resp.StatusCode, "response has status %d instead of %d", resp.StatusCode, statusCode)
+	assert.Equal(t, contentType, resp.Header.Get("Content-Type"), "response has content-type %s instead of %s", resp.Header.Get("Content-Type"), contentType)
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, content, string(b), "response has status %s instead of %s", string(b), content)
+}
+
+func AssertResponseStatus(t *testing.T, method, uri, accessToken string, statusCode int) {
+	t.Helper()
+	resp := DoRequest(t, method, uri, accessToken)
 	assert.Equal(t, statusCode, resp.StatusCode, "response has status %d instead of %d", resp.StatusCode, statusCode)
 }
 

@@ -43,6 +43,16 @@ func stringSet(sl []string) map[string]struct{} {
 	return m
 }
 
+func scopesAreSufficient(existingScopes, requiredScopes []string) bool {
+	m := stringSet(existingScopes)
+	for _, s := range requiredScopes {
+		if _, ok := m[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func (tok *Claims) IsValid(resourceID string, disableTokenExpirationCheck bool, scopes ...string) bool {
 	if !disableTokenExpirationCheck {
 		iat := time.Unix(int64(tok.Iat), 0)
@@ -54,13 +64,7 @@ func (tok *Claims) IsValid(resourceID string, disableTokenExpirationCheck bool, 
 	}
 	for _, p := range tok.Authorization.Permissions {
 		if p.Rsid == resourceID {
-			m := stringSet(p.Scopes)
-			for _, s := range scopes {
-				if _, ok := m[s]; !ok {
-					return false
-				}
-			}
-			return true
+			return scopesAreSufficient(p.Scopes, scopes)
 		}
 	}
 	return false

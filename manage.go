@@ -21,18 +21,20 @@ type ResourceStore interface {
 }
 
 type Manager struct {
-	getBaseURL         func(r *http.Request) url.URL
-	getProvider        func(r *http.Request) Provider
-	getResourceStore   func(r *http.Request) ResourceStore
-	includeScopes      bool
-	disableExpireCheck bool
-	paths              []Path
-	types              map[string]ResourceType
-	securitySchemes    map[string]struct{}
-	defaultRscTmpl     *ResourceTemplate
-	defaultSecurity    Security
-	getResourceName    func(rsc Resource) string
-	localEnforce       func(r *http.Request, resource Resource, scopes []string) bool
+	getBaseURL               func(r *http.Request) url.URL
+	getProvider              func(r *http.Request) Provider
+	getResourceStore         func(r *http.Request) ResourceStore
+	includeScopes            bool
+	disableExpireCheck       bool
+	paths                    []Path
+	types                    map[string]ResourceType
+	securitySchemes          map[string]struct{}
+	defaultRscTmpl           *ResourceTemplate
+	defaultSecurity          Security
+	getResourceName          func(rsc Resource) string
+	localEnforce             func(r *http.Request, resource Resource, scopes []string) bool
+	editUnauthorizedResponse func(rw http.ResponseWriter)
+	anonymousScopes          func(resource Resource) (scopes []string)
 }
 
 type ManagerOptions struct {
@@ -66,6 +68,16 @@ type ManagerOptions struct {
 	// based on a local access control list. If the handler return true, allow the request to come through.
 	// Otherwise, responds with 401.
 	LocalEnforce func(r *http.Request, resource Resource, scopes []string) bool
+
+	// EditUnauthorizedResponse allows you to add additional headers and write custom body for 401 unauthorized
+	// responses. Whatever you do, don't touch the "WWW-Authenticate" header as that is how the ticket is
+	// transferred. Also make sure to write headers with status code 401.
+	EditUnauthorizedResponse func(rw http.ResponseWriter)
+
+	// AnonymousScopes is invoked when the user is unauthenticated. It is given the resource object that is being
+	// accessed and should return the scopes available to anonymous users. If the scopes are sufficient, the user
+	// is allowed to access. Otherwise an UMA ticket is created and returned in 401 response as usual.
+	AnonymousScopes func(resource Resource) (scopes []string)
 }
 
 func New(
@@ -78,18 +90,20 @@ func New(
 ) *Manager {
 	sort.Sort(paths)
 	return &Manager{
-		getBaseURL:         opts.GetBaseURL,
-		getProvider:        opts.GetProvider,
-		getResourceStore:   opts.GetResourceStore,
-		includeScopes:      opts.IncludeScopesInPermissionTicket,
-		disableExpireCheck: opts.DisableTokenExpirationCheck,
-		types:              types,
-		paths:              paths,
-		securitySchemes:    stringSet(securitySchemes),
-		defaultRscTmpl:     defaultResource,
-		defaultSecurity:    defaultSecurity,
-		getResourceName:    opts.GetResourceName,
-		localEnforce:       opts.LocalEnforce,
+		getBaseURL:               opts.GetBaseURL,
+		getProvider:              opts.GetProvider,
+		getResourceStore:         opts.GetResourceStore,
+		includeScopes:            opts.IncludeScopesInPermissionTicket,
+		disableExpireCheck:       opts.DisableTokenExpirationCheck,
+		types:                    types,
+		paths:                    paths,
+		securitySchemes:          stringSet(securitySchemes),
+		defaultRscTmpl:           defaultResource,
+		defaultSecurity:          defaultSecurity,
+		getResourceName:          opts.GetResourceName,
+		localEnforce:             opts.LocalEnforce,
+		editUnauthorizedResponse: opts.EditUnauthorizedResponse,
+		anonymousScopes:          opts.AnonymousScopes,
 	}
 }
 
@@ -170,6 +184,14 @@ func getBearerToken(r *http.Request) string {
 	return ""
 }
 
+func (m *Manager) writeUnauthorizedResponse(w http.ResponseWriter) {
+	if m.editUnauthorizedResponse != nil {
+		m.editUnauthorizedResponse(w)
+	} else {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+}
+
 func (m *Manager) askForTicket(w http.ResponseWriter, p Provider, resource *Resource, scopes ...string) {
 	var ticket string
 	var err error
@@ -185,12 +207,15 @@ func (m *Manager) askForTicket(w http.ResponseWriter, p Provider, resource *Reso
 	w.Header().Set("WWW-Authenticate",
 		fmt.Sprintf(`UMA realm=%q, as_uri=%q, ticket=%q`, directives.Realm, directives.AsUri, ticket),
 	)
-	w.WriteHeader(http.StatusUnauthorized)
+	m.writeUnauthorizedResponse(w)
 }
 
 func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provider, rsc *Resource, scopes []string) (*Claims, bool) {
 	token := getBearerToken(r)
 	if token == "" {
+		if m.anonymousScopes != nil && scopesAreSufficient(m.anonymousScopes(*rsc), scopes) {
+			return nil, true
+		}
 		m.askForTicket(w, p, rsc, scopes...)
 		return nil, false
 	}
@@ -218,7 +243,7 @@ func (m *Manager) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource
 	if m.localEnforce != nil {
 		ok = m.localEnforce(r, *rsc, scopes)
 		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
+			m.writeUnauthorizedResponse(w)
 		}
 		return
 	}

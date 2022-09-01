@@ -80,7 +80,7 @@ func newMockAPI(
 	defaultResource *uma.ResourceTemplate,
 	defaultSecurity uma.Security,
 	paths uma.Paths,
-	includeScopeInPermission bool,
+	opts uma.ManagerOptions,
 ) *mockAPI {
 	sort.Sort(paths)
 	a := &mockAPI{
@@ -100,21 +100,20 @@ func newMockAPI(
 	}
 	a.server = httptest.NewServer(a.h)
 	a.baseURL = a.server.URL + basePath
+	_opts := opts
+	_opts.GetBaseURL = func(r *http.Request) url.URL {
+		u, _ := url.Parse(a.baseURL)
+		return *u
+	}
+	_opts.GetProvider = func(r *http.Request) uma.Provider {
+		return a.kp
+	}
+	_opts.GetResourceStore = func(r *http.Request) uma.ResourceStore {
+		return a.rscStore
+	}
+	_opts.DisableTokenExpirationCheck = true
 	a.man = uma.New(
-		uma.ManagerOptions{
-			GetBaseURL: func(r *http.Request) url.URL {
-				u, _ := url.Parse(a.baseURL)
-				return *u
-			},
-			GetProvider: func(r *http.Request) uma.Provider {
-				return a.kp
-			},
-			GetResourceStore: func(r *http.Request) uma.ResourceStore {
-				return a.rscStore
-			},
-			IncludeScopesInPermissionTicket: includeScopeInPermission,
-			DisableTokenExpirationCheck:     true,
-		},
+		_opts,
 		types,
 		securitySchemes,
 		defaultResource,

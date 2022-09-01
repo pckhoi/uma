@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mockUserAPI(t *testing.T, client *http.Client, includeScopeInPermission bool) *mockAPI {
+func mockUserAPI(t *testing.T, client *http.Client, opts uma.ManagerOptions) *mockAPI {
 	return newMockAPI(t, client, "/users",
 		map[string]uma.ResourceType{
 			"user": {
@@ -42,7 +42,7 @@ func mockUserAPI(t *testing.T, client *http.Client, includeScopeInPermission boo
 				},
 			}),
 		},
-		includeScopeInPermission,
+		opts,
 	)
 }
 
@@ -78,7 +78,7 @@ func registerUserResources(t *testing.T, api *mockAPI) {
 func TestMiddleware(t *testing.T) {
 	client, stop := testutil.RecordHTTP(t, "test_middleware", false)
 	defer stop()
-	api := mockUserAPI(t, client, true)
+	api := mockUserAPI(t, client, uma.ManagerOptions{IncludeScopesInPermissionTicket: true})
 	defer api.Stop(t)
 	registerUserResources(t, api)
 
@@ -144,7 +144,13 @@ func TestMiddleware(t *testing.T) {
 func TestMiddlewareNoSpecificScope(t *testing.T) {
 	client, stop := testutil.RecordHTTP(t, "test_middleware_no_specific_scope", false)
 	defer stop()
-	api := mockUserAPI(t, client, false)
+	api := mockUserAPI(t, client, uma.ManagerOptions{
+		EditUnauthorizedResponse: func(rw http.ResponseWriter) {
+			rw.Header().Add("Content-Type", "application/json")
+			rw.WriteHeader(http.StatusUnauthorized)
+			rw.Write([]byte(`{"message":"Unauthorized"}`))
+		},
+	})
 	defer api.Stop(t)
 	registerUserResources(t, api)
 
@@ -156,10 +162,23 @@ func TestMiddlewareNoSpecificScope(t *testing.T) {
 	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "johnd", http.MethodGet, api.server.URL+"/users/1", "")
 	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
 	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusOK)
-	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized)
+	testutil.AssertResponse(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized, "application/json", `{"message":"Unauthorized"}`)
 
 	rpt = testutil.AskForRPT(t, kc, api.userAccessToken, "alice", http.MethodGet, api.server.URL+"/users/1", "")
 	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", rpt, http.StatusOK)
-	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusUnauthorized)
-	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized)
+	testutil.AssertResponse(t, http.MethodPost, api.server.URL+"/users/1", rpt, http.StatusUnauthorized, "application/json", `{"message":"Unauthorized"}`)
+	testutil.AssertResponse(t, http.MethodGet, api.server.URL+"/users", rpt, http.StatusUnauthorized, "application/json", `{"message":"Unauthorized"}`)
+}
+
+func TestMiddlewareAnonymousAccess(t *testing.T) {
+	client, stop := testutil.RecordHTTP(t, "test_middleware_anonymous_access", false)
+	defer stop()
+	api := mockUserAPI(t, client, uma.ManagerOptions{
+		AnonymousScopes: func(resource uma.Resource) (scopes []string) {
+			return []string{"read"}
+		},
+	})
+	defer api.Stop(t)
+	testutil.AssertResponseStatus(t, http.MethodGet, api.server.URL+"/users/1", "", http.StatusOK)
+	testutil.AssertResponseStatus(t, http.MethodPost, api.server.URL+"/users/1", "", http.StatusUnauthorized)
 }
