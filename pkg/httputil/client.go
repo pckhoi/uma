@@ -110,6 +110,21 @@ func (c *Client) Get(url string) (resp *http.Response, err error) {
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetObject(endpoint string, response interface{}) (err error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return
+	}
+	resp, err := c.DoRequest(req)
+	if err != nil {
+		return err
+	}
+	if err = Ensure2XX(resp); err != nil {
+		return err
+	}
+	return DecodeJSONResponse(resp, response)
+}
+
 func (c *Client) CreateObject(endpoint string, payload, response interface{}) (err error) {
 	req, err := JSONRequest(http.MethodPost, endpoint, payload)
 	if err != nil {

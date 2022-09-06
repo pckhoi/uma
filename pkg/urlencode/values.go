@@ -61,6 +61,19 @@ func serializeFieldValue(v reflect.Value) ([]string, error) {
 			return nil, fmt.Errorf("unhandled slice of %v", elemKind)
 		}
 		return rslt, nil
+	case reflect.Pointer:
+		elem := v.Elem()
+		elemKind := v.Type().Elem().Kind()
+		switch elemKind {
+		case reflect.String:
+			return []string{elem.String()}, nil
+		case reflect.Int:
+			return []string{fmt.Sprintf("%d", elem.Int())}, nil
+		case reflect.Bool:
+			return []string{fmt.Sprintf("%v", elem.Bool())}, nil
+		default:
+			return nil, fmt.Errorf("unhandled slice of %v", elemKind)
+		}
 	default:
 		return nil, fmt.Errorf("unhandled %v", v.Kind())
 	}

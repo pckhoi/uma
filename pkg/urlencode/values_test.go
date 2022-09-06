@@ -8,6 +8,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func strPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func TestToValues(t *testing.T) {
 	type ClaimTokenFormat string
 
@@ -27,6 +39,9 @@ func TestToValues(t *testing.T) {
 		StringSliceField     []string
 		BoolSliceField       []bool
 		IntSliceField        []int
+		StringPointer        *string
+		IntPointer           *int
+		BoolPointer          *bool
 	}
 
 	values, err := ToValues(&Payload{
@@ -40,6 +55,9 @@ func TestToValues(t *testing.T) {
 		StringSliceField:     []string{"a", "b"},
 		BoolSliceField:       []bool{true, false},
 		IntSliceField:        []int{1, 2},
+		StringPointer:        strPtr(""),
+		IntPointer:           intPtr(0),
+		BoolPointer:          boolPtr(false),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, url.Values(map[string][]string{
@@ -51,6 +69,9 @@ func TestToValues(t *testing.T) {
 		"int_slice_field":     {"1", "2"},
 		"string_field":        {"abc"},
 		"string_slice_field":  {"a", "b"},
+		"string_pointer":      {""},
+		"int_pointer":         {"0"},
+		"bool_pointer":        {"false"},
 	}), *values)
 
 	values, err = ToValues(&Payload{

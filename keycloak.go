@@ -49,9 +49,8 @@ func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, o
 	return p, nil
 }
 
-type kcError struct {
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
+func (p *KeycloakProvider) Credentials() (issuer, clientID, clientSecret string) {
+	return p.issuer, p.clientID, p.clientSecret
 }
 
 func (p *KeycloakProvider) CreateResource(request *Resource) (response *ExpandedResource, err error) {
