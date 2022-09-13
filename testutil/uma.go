@@ -59,8 +59,9 @@ func RequestRPT(t *testing.T, kc *rp.KeycloakClient, accessTokens map[string]str
 	ticket := extractTicketFrom401(t, resp)
 	accessToken, ok := accessTokens[username]
 	if !ok {
-		accessToken, _, err = kc.AuthenticateUserWithPassword(username, "password")
+		creds, err := kc.AuthenticateUserWithPassword(username, "password")
 		require.NoError(t, err, "unable to authenticate user")
+		accessToken = creds.AccessToken
 		accessTokens[username] = accessToken
 		t.Logf("logged in user %q", username)
 	} else {

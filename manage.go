@@ -192,6 +192,13 @@ func (m *Manager) writeUnauthorizedResponse(w http.ResponseWriter) {
 	}
 }
 
+func (m *Manager) AskForTicket(w http.ResponseWriter, r *http.Request) {
+	p := m.getProvider(r)
+	rsc := GetResource(r)
+	scopes := GetScopes(r)
+	m.askForTicket(w, p, rsc, scopes...)
+}
+
 func (m *Manager) askForTicket(w http.ResponseWriter, p Provider, resource *Resource, scopes ...string) {
 	var ticket string
 	var err error

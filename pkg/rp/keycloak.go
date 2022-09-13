@@ -30,12 +30,13 @@ func NewKeycloakClient(issuer, clientID, clientSecret string, client *http.Clien
 	return kc, nil
 }
 
-type tokenResponse struct {
-	IDToken     string `json:"id_token,omitempty"`
-	AccessToken string `json:"access_token,omitempty"`
+type Credentials struct {
+	IDToken      string `json:"id_token,omitempty"`
+	AccessToken  string `json:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
-func (kc *KeycloakClient) AuthenticateUserWithPassword(username, password string) (accessToken, idToken string, err error) {
+func (kc *KeycloakClient) AuthenticateUserWithPassword(username, password string) (creds *Credentials, err error) {
 	params := map[string][]string{
 		"grant_type":    {"password"},
 		"client_id":     {kc.clientID},
@@ -48,11 +49,29 @@ func (kc *KeycloakClient) AuthenticateUserWithPassword(username, password string
 	if err != nil {
 		return
 	}
-	tok := &tokenResponse{}
+	tok := &Credentials{}
 	if err = httputil.DecodeJSONResponse(resp, tok); err != nil {
 		return
 	}
-	return tok.AccessToken, tok.IDToken, nil
+	return tok, nil
+}
+
+func (kc *KeycloakClient) RefreshCredentials(creds Credentials) (*Credentials, error) {
+	params := map[string][]string{
+		"grant_type":    {"refresh_token"},
+		"client_id":     {kc.clientID},
+		"client_secret": {kc.clientSecret},
+		"refresh_token": {creds.RefreshToken},
+	}
+	resp, err := httputil.PostFormUrlencoded(kc.client, kc.oidc.Endpoint().TokenURL, nil, params)
+	if err != nil {
+		return nil, err
+	}
+	tok := &Credentials{}
+	if err = httputil.DecodeJSONResponse(resp, tok); err != nil {
+		return nil, err
+	}
+	return tok, nil
 }
 
 type ClaimTokenFormat string
@@ -120,7 +139,7 @@ func (kc *KeycloakClient) RequestRPT(accessToken string, request RPTRequest) (rp
 	if err != nil {
 		return "", err
 	}
-	tok := &tokenResponse{}
+	tok := &Credentials{}
 	if err := httputil.DecodeJSONResponse(resp, tok); err != nil {
 		return "", err
 	}

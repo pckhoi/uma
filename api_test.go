@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pckhoi/uma"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -97,6 +98,17 @@ func newMockAPI(
 		a.lastResource = uma.GetResource(r)
 		a.lastClaims = uma.GetClaims(r)
 		a.lastScopes = uma.GetScopes(r)
+		if a.lastResource != nil && a.lastClaims != nil {
+			scopes := uma.GetClaimsScopes(r)
+			for _, p := range a.lastClaims.Authorization.Permissions {
+				if p.Rsid == a.lastResource.ID {
+					for _, s := range p.Scopes {
+						_, ok := scopes[s]
+						assert.True(t, ok)
+					}
+				}
+			}
+		}
 	}
 	a.server = httptest.NewServer(a.h)
 	a.baseURL = a.server.URL + basePath

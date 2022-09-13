@@ -118,9 +118,9 @@ func TestKeycloakProvider(t *testing.T) {
 
 	ticket, err := kp.CreatePermissionTicket(rscResp2.ID, "read")
 	require.NoError(t, err)
-	token, _, err := kc.AuthenticateUserWithPassword("johnd", "password")
+	creds, err := kc.AuthenticateUserWithPassword("johnd", "password")
 	require.NoError(t, err)
-	rptStr, err := kc.RequestRPT(token, rp.RPTRequest{
+	rptStr, err := kc.RequestRPT(creds.AccessToken, rp.RPTRequest{
 		Ticket: ticket,
 	})
 	require.NoError(t, err)

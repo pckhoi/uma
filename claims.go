@@ -83,3 +83,19 @@ func GetClaims(r *http.Request) *Claims {
 	}
 	return nil
 }
+
+// GetClaimsScopes check whether current RPT claims has specified scopes
+// for the current resource
+func GetClaimsScopes(r *http.Request) (scopes map[string]struct{}) {
+	c := GetClaims(r)
+	rsc := GetResource(r)
+	if c == nil || c.Authorization == nil || rsc == nil {
+		return
+	}
+	for _, p := range c.Authorization.Permissions {
+		if p.Rsid == rsc.ID {
+			return stringSet(p.Scopes)
+		}
+	}
+	return
+}
