@@ -174,7 +174,7 @@ func TestMiddlewareAnonymousAccess(t *testing.T) {
 	client, stop := testutil.RecordHTTP(t, "test_middleware_anonymous_access", false)
 	defer stop()
 	api := mockUserAPI(t, client, uma.ManagerOptions{
-		AnonymousScopes: func(resource uma.Resource) (scopes []string) {
+		AnonymousScopes: func(r *http.Request, resource uma.Resource) (scopes []string) {
 			return []string{"read"}
 		},
 	})

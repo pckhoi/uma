@@ -31,10 +31,10 @@ type Manager struct {
 	securitySchemes          map[string]struct{}
 	defaultRscTmpl           *ResourceTemplate
 	defaultSecurity          Security
-	getResourceName          func(rsc Resource) string
+	getResourceName          func(r *http.Request, rsc Resource) string
 	localEnforce             func(r *http.Request, resource Resource, scopes []string) bool
 	editUnauthorizedResponse func(rw http.ResponseWriter)
-	anonymousScopes          func(resource Resource) (scopes []string)
+	anonymousScopes          func(r *http.Request, resource Resource) (scopes []string)
 }
 
 type ManagerOptions struct {
@@ -62,7 +62,7 @@ type ManagerOptions struct {
 	// GetResourceName if defined, must return the correct name of the resource. The preferred way to set resource
 	// name is to define name template for the resource (x-uma-resource.name) in the OpenAPI spec. This method
 	// should only be used when that is not possible.
-	GetResourceName func(rsc Resource) string
+	GetResourceName func(r *http.Request, rsc Resource) string
 
 	// LocalEnforce handler if defined, cut the UMA provider out of the flow entirely, and allows deciding access
 	// based on a local access control list. If the handler return true, allow the request to come through.
@@ -77,7 +77,7 @@ type ManagerOptions struct {
 	// AnonymousScopes is invoked when the user is unauthenticated. It is given the resource object that is being
 	// accessed and should return the scopes available to anonymous users. If the scopes are sufficient, the user
 	// is allowed to access. Otherwise an UMA ticket is created and returned in 401 response as usual.
-	AnonymousScopes func(resource Resource) (scopes []string)
+	AnonymousScopes func(r *http.Request, resource Resource) (scopes []string)
 }
 
 func New(
@@ -107,7 +107,7 @@ func New(
 	}
 }
 
-func (m *Manager) matchPath(baseURL url.URL, path string) (*Resource, *Path) {
+func (m *Manager) matchPath(r *http.Request, baseURL url.URL, path string) (*Resource, *Path) {
 	if !strings.HasPrefix(path, baseURL.Path) {
 		return nil, nil
 	}
@@ -124,7 +124,7 @@ func (m *Manager) matchPath(baseURL url.URL, path string) (*Resource, *Path) {
 			rsc = m.defaultRscTmpl.CreateResource(m.types, baseURL.String()+path, nil)
 		}
 		if m.getResourceName != nil {
-			rsc.Name = m.getResourceName(*rsc)
+			rsc.Name = m.getResourceName(r, *rsc)
 		}
 		return rsc, &p
 	}
@@ -134,7 +134,7 @@ func (m *Manager) matchPath(baseURL url.URL, path string) (*Resource, *Path) {
 func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []string) {
 	baseURL := m.getBaseURL(r)
 	baseURL.Path = strings.TrimSuffix(baseURL.Path, "/")
-	rsc, p := m.matchPath(baseURL, r.URL.Path)
+	rsc, p := m.matchPath(r, baseURL, r.URL.Path)
 	if rsc == nil {
 		return
 	}
@@ -163,8 +163,8 @@ func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) 
 
 // RegisterResourceAt finds resource at path. If one is found, it registers the resource with the provider.
 // If a resource is not found, both rsc and err are nil.
-func (m *Manager) RegisterResourceAt(rs ResourceStore, p Provider, baseURL url.URL, path string) (rsc *Resource, err error) {
-	rsc, _ = m.matchPath(baseURL, path)
+func (m *Manager) RegisterResourceAt(r *http.Request, rs ResourceStore, p Provider, baseURL url.URL, path string) (rsc *Resource, err error) {
+	rsc, _ = m.matchPath(r, baseURL, path)
 	if rsc == nil {
 		return
 	}
@@ -220,7 +220,7 @@ func (m *Manager) askForTicket(w http.ResponseWriter, p Provider, resource *Reso
 func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provider, rsc *Resource, scopes []string) (*Claims, bool) {
 	token := getBearerToken(r)
 	if token == "" {
-		if m.anonymousScopes != nil && scopesAreSufficient(m.anonymousScopes(*rsc), scopes) {
+		if m.anonymousScopes != nil && scopesAreSufficient(m.anonymousScopes(r, *rsc), scopes) {
 			return nil, true
 		}
 		m.askForTicket(w, p, rsc, scopes...)
