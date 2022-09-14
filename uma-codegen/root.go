@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/pckhoi/uma/pkg/types"
@@ -74,6 +75,9 @@ func RootCmd() *cobra.Command {
 				}
 				paths = append(paths, obj)
 			}
+			sort.Slice(paths, func(i, j int) bool {
+				return paths[i].Path < paths[j].Path
+			})
 
 			var w io.Writer
 			if output == "" {
