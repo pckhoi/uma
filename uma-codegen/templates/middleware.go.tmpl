@@ -4,7 +4,8 @@ import (
     "github.com/pckhoi/uma"
 )
 
-var umaResourceTypes = map[string]uma.ResourceType{{`{`}}{{range $index, $element := .ResourceTypes}}
+// UMAResourceTypes is a map of defined resource types
+var UMAResourceTypes = map[string]uma.ResourceType{{`{`}}{{range $index, $element := .ResourceTypes}}
     {{printf "%q" $index}}: {
         Type: {{printf "%q" $index}},
         Description: {{$element.Description | printf "%q"}},
@@ -41,7 +42,7 @@ var umaPaths uma.Paths = []uma.Path{{`{`}}{{range $path := .Paths}}{{with $path}
 func UMAManager(opts uma.ManagerOptions) *uma.Manager {
     return uma.New(
         opts,
-        umaResourceTypes,
+        UMAResourceTypes,
         umaSecuritySchemes,
         umaDefaultResource,
         umaDefaultSecurity,
