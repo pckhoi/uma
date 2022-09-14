@@ -108,22 +108,3 @@ func (p *Path) FindScopes(securitySchemes map[string]struct{}, method string) (s
 	}
 	return nil
 }
-
-type Paths []Path
-
-func (t Paths) Len() int {
-	return len(t)
-}
-
-func (t Paths) Less(i, j int) bool {
-	if t[i].len < t[j].len {
-		return true
-	} else if t[i].len > t[j].len {
-		return false
-	}
-	return false
-}
-
-func (t Paths) Swap(i, j int) {
-	t[i], t[j] = t[j], t[i]
-}

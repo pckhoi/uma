@@ -76,6 +76,12 @@ func RootCmd() *cobra.Command {
 				paths = append(paths, obj)
 			}
 			sort.Slice(paths, func(i, j int) bool {
+				ni, nj := len(paths[i].Path), len(paths[j].Path)
+				if ni > nj {
+					return false
+				} else if ni < nj {
+					return true
+				}
 				return paths[i].Path < paths[j].Path
 			})
 

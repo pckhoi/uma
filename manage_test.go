@@ -29,7 +29,7 @@ func mockUserAPI(t *testing.T, client *http.Client, opts uma.ManagerOptions) *mo
 		[]map[string][]string{
 			{"oidc": {"read"}},
 		},
-		uma.Paths{
+		[]uma.Path{
 			uma.NewPath("/", nil, map[string]uma.Operation{
 				http.MethodGet: {},
 			}),

@@ -26,7 +26,7 @@ var umaDefaultSecurity uma.Security = {{if eq .DefaultSecurity nil}}nil{{else}}{
     {{end}}},
 {{end}}}{{end}}{{end}}
 
-var umaPaths uma.Paths = []uma.Path{{`{`}}{{range $path := .Paths}}{{with $path}}
+var umaPaths = []uma.Path{{`{`}}{{range $path := .Paths}}{{with $path}}
     uma.NewPath({{printf "%q" .Path}}, {{if ne .ResourceType ""}}uma.NewResourceTemplate({{printf "%q" .ResourceType}}, {{printf "%q" .ResourceName}}){{else}}nil{{end}}, map[string]uma.Operation{{`{`}}{{range $method, $op := .Operations}}
         {{printf "%q" $method}}: {{`{`}}{{if ne $op.Security nil}}
             Security: []map[string][]string{{`{`}}{{range $element := $op.Security}}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 )
 
@@ -86,9 +85,8 @@ func New(
 	securitySchemes []string,
 	defaultResource *ResourceTemplate,
 	defaultSecurity Security,
-	paths Paths,
+	paths []Path,
 ) *Manager {
-	sort.Sort(paths)
 	return &Manager{
 		getBaseURL:               opts.GetBaseURL,
 		getProvider:              opts.GetProvider,

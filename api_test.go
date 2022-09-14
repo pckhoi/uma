@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sort"
 	"testing"
 
 	"github.com/pckhoi/uma"
@@ -80,10 +79,9 @@ func newMockAPI(
 	securitySchemes []string,
 	defaultResource *uma.ResourceTemplate,
 	defaultSecurity uma.Security,
-	paths uma.Paths,
+	paths []uma.Path,
 	opts uma.ManagerOptions,
 ) *mockAPI {
-	sort.Sort(paths)
 	a := &mockAPI{
 		types:           types,
 		rscStore:        make(mockResourceStore),
