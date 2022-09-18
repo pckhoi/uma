@@ -12,6 +12,7 @@ import (
 type KeycloakProvider struct {
 	*baseProvider
 	ownerManagedAccess bool
+	ClientID           string
 	_client            *http.Client
 }
 
@@ -34,7 +35,8 @@ func WithKeycloakOwnerManagedAccess() KeycloakOption {
 
 func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, opts ...KeycloakOption) (p *KeycloakProvider, err error) {
 	p = &KeycloakProvider{
-		_client: http.DefaultClient,
+		_client:  http.DefaultClient,
+		ClientID: clientID,
 	}
 	for _, opt := range opts {
 		opt(p)
