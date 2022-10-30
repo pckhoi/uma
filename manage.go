@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/go-logr/logr"
 )
 
 // ResourceStore persists resource name and id as registered with the provider
@@ -31,9 +33,10 @@ type Manager struct {
 	defaultRscTmpl           *ResourceTemplate
 	defaultSecurity          Security
 	getResourceName          func(r *http.Request, rsc Resource) string
-	localEnforce             func(r *http.Request, resource Resource, scopes []string) bool
+	customEnforce            func(r *http.Request, resource Resource, scopes []string) bool
 	editUnauthorizedResponse func(rw http.ResponseWriter)
 	anonymousScopes          func(r *http.Request, resource Resource) (scopes []string)
+	logger                   *logr.Logger
 }
 
 type ManagerOptions struct {
@@ -63,10 +66,9 @@ type ManagerOptions struct {
 	// should only be used when that is not possible.
 	GetResourceName func(r *http.Request, rsc Resource) string
 
-	// LocalEnforce handler if defined, cut the UMA provider out of the flow entirely, and allows deciding access
-	// based on a local access control list. If the handler return true, allow the request to come through.
-	// Otherwise, responds with 401.
-	LocalEnforce func(r *http.Request, resource Resource, scopes []string) bool
+	// CustomEnforce handler if defined, cut the UMA provider out of the flow entirely, and allows deciding access
+	// with custom logic. If the handler return true, allow the request to come through. Otherwise, responds with 401.
+	CustomEnforce func(r *http.Request, resource Resource, scopes []string) bool
 
 	// EditUnauthorizedResponse allows you to add additional headers and write custom body for 401 unauthorized
 	// responses. Whatever you do, don't touch the "WWW-Authenticate" header as that is how the ticket is
@@ -77,6 +79,9 @@ type ManagerOptions struct {
 	// accessed and should return the scopes available to anonymous users. If the scopes are sufficient, the user
 	// is allowed to access. Otherwise an UMA ticket is created and returned in 401 response as usual.
 	AnonymousScopes func(r *http.Request, resource Resource) (scopes []string)
+
+	// If provided, Logger prints auth interactions
+	Logger *logr.Logger
 }
 
 func New(
@@ -99,9 +104,16 @@ func New(
 		defaultRscTmpl:           defaultResource,
 		defaultSecurity:          defaultSecurity,
 		getResourceName:          opts.GetResourceName,
-		localEnforce:             opts.LocalEnforce,
+		customEnforce:            opts.CustomEnforce,
 		editUnauthorizedResponse: opts.EditUnauthorizedResponse,
 		anonymousScopes:          opts.AnonymousScopes,
+		logger:                   opts.Logger,
+	}
+}
+
+func (m *Manager) info(msg string, args ...any) {
+	if m.logger != nil {
+		m.logger.Info(msg, args...)
 	}
 }
 
@@ -146,6 +158,11 @@ func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []strin
 func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) error {
 	if s, err := rs.Get(rsc.Name); err == nil && s != "" {
 		rsc.ID = s
+		m.info("fetched resource from store",
+			"id", rsc.ID,
+			"name", rsc.Name,
+			"uri", rsc.URI,
+		)
 		return nil
 	}
 	resp, err := p.CreateResource(rsc)
@@ -156,6 +173,11 @@ func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) 
 		return err
 	}
 	rsc.ID = resp.ID
+	m.info("created resource",
+		"id", rsc.ID,
+		"name", rsc.Name,
+		"uri", rsc.URI,
+	)
 	return nil
 }
 
@@ -215,10 +237,26 @@ func (m *Manager) askForTicket(w http.ResponseWriter, p Provider, resource *Reso
 	m.writeUnauthorizedResponse(w)
 }
 
+func (m *Manager) loggerWithValues(args ...any) *logr.Logger {
+	if m.logger != nil {
+		l := m.logger.WithValues(args...)
+		return &l
+	}
+	return nil
+}
+
 func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provider, rsc *Resource, scopes []string) (*Claims, bool) {
 	token := getBearerToken(r)
 	if token == "" {
-		if m.anonymousScopes != nil && scopesAreSufficient(m.anonymousScopes(r, *rsc), scopes) {
+		if m.anonymousScopes != nil && scopesAreSufficient(
+			m.loggerWithValues(
+				"method", r.Method,
+				"path", r.URL.Path,
+				"anonymous", true,
+			),
+			m.anonymousScopes(r, *rsc),
+			scopes,
+		) {
 			return nil, true
 		}
 		m.askForTicket(w, p, rsc, scopes...)
@@ -226,6 +264,10 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 	}
 	b, err := p.VerifySignature(r.Context(), token)
 	if err != nil {
+		m.info("invalid token signature",
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
 		m.askForTicket(w, p, rsc, scopes...)
 		return nil, false
 	}
@@ -233,7 +275,15 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 	if err = json.Unmarshal(b, rpt); err != nil {
 		panic(err)
 	}
-	if rpt.IsValid(rsc.ID, m.disableExpireCheck, scopes...) {
+	if rpt.IsValid(
+		m.loggerWithValues(
+			"method", r.Method,
+			"path", r.URL.Path,
+		),
+		rsc.ID,
+		m.disableExpireCheck,
+		scopes...,
+	) {
 		return rpt, true
 	}
 	m.askForTicket(w, p, rsc, scopes...)
@@ -243,10 +293,18 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 func (m *Manager) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource, scopes []string, claims *Claims, ok bool) {
 	rsc, scopes = m.matchOperation(r)
 	if rsc == nil || len(scopes) == 0 {
+		m.info("operation skipped because either resource or scopes are empty",
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
 		return nil, nil, nil, true
 	}
-	if m.localEnforce != nil {
-		ok = m.localEnforce(r, *rsc, scopes)
+	if m.customEnforce != nil {
+		m.info("use custom enforce handler",
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
+		ok = m.customEnforce(r, *rsc, scopes)
 		if !ok {
 			m.writeUnauthorizedResponse(w)
 		}
@@ -275,17 +333,30 @@ func (m *Manager) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource
 func (m *Manager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if rsc, scopes, claims, ok := m.enforce(w, r); ok {
+			args := []any{
+				"method", r.Method,
+				"path", r.URL.Path,
+			}
 			if rsc != nil {
+				args = append(args, "resource_id", rsc.ID)
 				r = setResource(r, rsc)
 			}
 			if scopes != nil {
+				args = append(args, "scopes", scopes)
 				r = setScopes(r, scopes)
 			}
 			if claims != nil {
+				args = append(args, "claims", claims)
 				r = setClaims(r, claims)
 			}
+			m.info("access granted", args...)
 			next.ServeHTTP(w, r)
 			return
+		} else {
+			m.info("access denied",
+				"method", r.Method,
+				"path", r.URL.Path,
+			)
 		}
 	})
 }
