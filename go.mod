@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/coreos/go-oidc/v3 v3.2.0
 	github.com/dnaeon/go-vcr/v2 v2.0.1
+	github.com/go-logr/logr v1.2.3
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -12,7 +13,6 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -25,5 +25,3 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/wrgl/wrgl => ../wrgl

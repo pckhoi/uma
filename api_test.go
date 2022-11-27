@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/pckhoi/uma"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,6 +130,7 @@ func newMockAPI(
 		defaultResource,
 		defaultSecurity,
 		paths,
+		testr.New(t),
 	)
 	a.h.middlewares = []Middleware{a.man.Middleware}
 	return a

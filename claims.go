@@ -45,41 +45,35 @@ func stringSet(sl []string) map[string]struct{} {
 	return m
 }
 
-func scopesAreSufficient(logger *logr.Logger, existingScopes, requiredScopes []string) bool {
+func scopesAreSufficient(existingScopes, requiredScopes []string, logger logr.Logger) bool {
 	m := stringSet(existingScopes)
 	for _, s := range requiredScopes {
 		if _, ok := m[s]; !ok {
-			if logger != nil {
-				logger.Info("missing scope", "scope", s)
-			}
+			logger.Info("missing scope", "scope", s)
 			return false
 		}
 	}
 	return true
 }
 
-func (tok *Claims) IsValid(logger *logr.Logger, resourceID string, disableTokenExpirationCheck bool, scopes ...string) bool {
+func (tok *Claims) IsValid(resourceID string, disableTokenExpirationCheck bool, scopes []string, logger logr.Logger) bool {
 	if !disableTokenExpirationCheck {
 		iat := time.Unix(int64(tok.Iat), 0)
 		exp := time.Unix(int64(tok.Exp), 0)
 		now := time.Now()
 		if !now.After(iat) || !now.Before(exp) {
-			if logger != nil {
-				logger.Info("token expired", "iat", iat, "exp", exp, "now", now)
-			}
+			logger.Info("token expired", "iat", iat, "exp", exp, "now", now)
 			return false
 		}
 	}
 	if tok.Authorization != nil {
 		for _, p := range tok.Authorization.Permissions {
 			if p.Rsid == resourceID {
-				return scopesAreSufficient(logger, p.Scopes, scopes)
+				return scopesAreSufficient(p.Scopes, scopes, logger)
 			}
 		}
 	}
-	if logger != nil {
-		logger.Info("resource not found in claims", "resource_id", resourceID, "claims", tok)
-	}
+	logger.Info("resource not found in claims", "resource_id", resourceID, "claims", tok)
 	return false
 }
 

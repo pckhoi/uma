@@ -2,6 +2,7 @@ package {{.Package}}
 
 import (
     "github.com/pckhoi/uma"
+	"github.com/go-logr/logr"
 )
 
 // UMAResourceTypes is a map of defined resource types
@@ -39,7 +40,7 @@ var umaPaths = []uma.Path{{`{`}}{{range $path := .Paths}}{{with $path}}
 {{end}}{{end}}}
 
 // UMAManager returns an uma.Manager instance configured according to OpenAPI schema
-func UMAManager(opts uma.ManagerOptions) *uma.Manager {
+func UMAManager(opts uma.ManagerOptions, logger logr.Logger) *uma.Manager {
     return uma.New(
         opts,
         UMAResourceTypes,
@@ -47,5 +48,6 @@ func UMAManager(opts uma.ManagerOptions) *uma.Manager {
         umaDefaultResource,
         umaDefaultSecurity,
         umaPaths,
+        logger,
     )
 }

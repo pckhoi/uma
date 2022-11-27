@@ -11,6 +11,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/dnaeon/go-vcr/v2/recorder"
+	"github.com/go-logr/logr"
 	"github.com/pckhoi/uma"
 )
 
@@ -72,7 +73,7 @@ func main() {
 		},
 		DisableTokenExpirationCheck:     true,
 		IncludeScopesInPermissionTicket: true,
-	})
+	}, logr.Discard())
 	sm.HandleFunc("/register-resources", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := kp.CreateResource(&uma.Resource{
 			ResourceType: uma.ResourceType{

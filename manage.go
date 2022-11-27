@@ -36,7 +36,7 @@ type Manager struct {
 	customEnforce            func(r *http.Request, resource Resource, scopes []string) bool
 	editUnauthorizedResponse func(rw http.ResponseWriter)
 	anonymousScopes          func(r *http.Request, resource Resource) (scopes []string)
-	logger                   *logr.Logger
+	logger                   logr.Logger
 }
 
 type ManagerOptions struct {
@@ -79,9 +79,6 @@ type ManagerOptions struct {
 	// accessed and should return the scopes available to anonymous users. If the scopes are sufficient, the user
 	// is allowed to access. Otherwise an UMA ticket is created and returned in 401 response as usual.
 	AnonymousScopes func(r *http.Request, resource Resource) (scopes []string)
-
-	// If provided, Logger prints auth interactions
-	Logger *logr.Logger
 }
 
 func New(
@@ -91,6 +88,7 @@ func New(
 	defaultResource *ResourceTemplate,
 	defaultSecurity Security,
 	paths []Path,
+	logger logr.Logger,
 ) *Manager {
 	return &Manager{
 		getBaseURL:               opts.GetBaseURL,
@@ -107,13 +105,7 @@ func New(
 		customEnforce:            opts.CustomEnforce,
 		editUnauthorizedResponse: opts.EditUnauthorizedResponse,
 		anonymousScopes:          opts.AnonymousScopes,
-		logger:                   opts.Logger,
-	}
-}
-
-func (m *Manager) info(msg string, args ...any) {
-	if m.logger != nil {
-		m.logger.Info(msg, args...)
+		logger:                   logger,
 	}
 }
 
@@ -158,7 +150,7 @@ func (m *Manager) matchOperation(r *http.Request) (rsc *Resource, scopes []strin
 func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) error {
 	if s, err := rs.Get(rsc.Name); err == nil && s != "" {
 		rsc.ID = s
-		m.info("fetched resource from store",
+		m.logger.Info("fetched resource from store",
 			"id", rsc.ID,
 			"name", rsc.Name,
 			"uri", rsc.URI,
@@ -173,7 +165,7 @@ func (m *Manager) registerResource(rs ResourceStore, p Provider, rsc *Resource) 
 		return err
 	}
 	rsc.ID = resp.ID
-	m.info("created resource",
+	m.logger.Info("created resource",
 		"id", rsc.ID,
 		"name", rsc.Name,
 		"uri", rsc.URI,
@@ -237,25 +229,17 @@ func (m *Manager) askForTicket(w http.ResponseWriter, p Provider, resource *Reso
 	m.writeUnauthorizedResponse(w)
 }
 
-func (m *Manager) loggerWithValues(args ...any) *logr.Logger {
-	if m.logger != nil {
-		l := m.logger.WithValues(args...)
-		return &l
-	}
-	return nil
-}
-
 func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provider, rsc *Resource, scopes []string) (*Claims, bool) {
 	token := getBearerToken(r)
 	if token == "" {
 		if m.anonymousScopes != nil && scopesAreSufficient(
-			m.loggerWithValues(
+			m.anonymousScopes(r, *rsc),
+			scopes,
+			m.logger.WithValues(
 				"method", r.Method,
 				"path", r.URL.Path,
 				"anonymous", true,
 			),
-			m.anonymousScopes(r, *rsc),
-			scopes,
 		) {
 			return nil, true
 		}
@@ -264,7 +248,7 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 	}
 	b, err := p.VerifySignature(r.Context(), token)
 	if err != nil {
-		m.info("invalid token signature",
+		m.logger.Info("invalid token signature",
 			"method", r.Method,
 			"path", r.URL.Path,
 		)
@@ -276,13 +260,13 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 		panic(err)
 	}
 	if rpt.IsValid(
-		m.loggerWithValues(
+		rsc.ID,
+		m.disableExpireCheck,
+		scopes,
+		m.logger.WithValues(
 			"method", r.Method,
 			"path", r.URL.Path,
 		),
-		rsc.ID,
-		m.disableExpireCheck,
-		scopes...,
 	) {
 		return rpt, true
 	}
@@ -293,14 +277,14 @@ func (m *Manager) hasPermission(w http.ResponseWriter, r *http.Request, p Provid
 func (m *Manager) enforce(w http.ResponseWriter, r *http.Request) (rsc *Resource, scopes []string, claims *Claims, ok bool) {
 	rsc, scopes = m.matchOperation(r)
 	if rsc == nil || len(scopes) == 0 {
-		m.info("operation skipped because either resource or scopes are empty",
+		m.logger.Info("operation skipped because either resource or scopes are empty",
 			"method", r.Method,
 			"path", r.URL.Path,
 		)
 		return nil, nil, nil, true
 	}
 	if m.customEnforce != nil {
-		m.info("use custom enforce handler",
+		m.logger.Info("use custom enforce handler",
 			"method", r.Method,
 			"path", r.URL.Path,
 		)
@@ -349,11 +333,11 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 				args = append(args, "claims", claims)
 				r = setClaims(r, claims)
 			}
-			m.info("access granted", args...)
+			m.logger.Info("access granted", args...)
 			next.ServeHTTP(w, r)
 			return
 		} else {
-			m.info("access denied",
+			m.logger.Info("access denied",
 				"method", r.Method,
 				"path", r.URL.Path,
 			)
