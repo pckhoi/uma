@@ -118,12 +118,18 @@ func (m *Manager) matchPath(r *http.Request, baseURL url.URL, path string) (*Res
 		path = "/"
 	}
 	for _, p := range m.paths {
-		rsc, ok := p.MatchPath(m.types, baseURL.String(), path)
-		if !ok {
-			continue
-		}
-		if rsc == nil && m.defaultRscTmpl != nil {
-			rsc = m.defaultRscTmpl.CreateResource(m.types, baseURL.String()+path, nil)
+		var rsc *Resource
+		if path == "/" && m.defaultRscTmpl != nil {
+			rsc = m.defaultRscTmpl.CreateResource(m.types, baseURL.String(), nil)
+		} else {
+			var ok bool
+			rsc, ok = p.MatchPath(m.types, baseURL.String(), path)
+			if !ok {
+				continue
+			}
+			if rsc == nil && m.defaultRscTmpl != nil {
+				rsc = m.defaultRscTmpl.CreateResource(m.types, baseURL.String()+path, nil)
+			}
 		}
 		if m.getResourceName != nil {
 			rsc.Name = m.getResourceName(r, *rsc)
