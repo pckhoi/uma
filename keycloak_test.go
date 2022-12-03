@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-logr/logr/testr"
 	"github.com/pckhoi/uma"
 	"github.com/pckhoi/uma/pkg/rp"
 	"github.com/pckhoi/uma/testutil"
@@ -21,7 +22,9 @@ func createKeycloakProvider(t *testing.T, client *http.Client) *uma.KeycloakProv
 	kp, err := uma.NewKeycloakProvider(
 		issuer, "test-client", "change-me",
 		oidc.NewRemoteKeySet(oidc.ClientContext(context.Background(), client), issuer+"/protocol/openid-connect/certs"),
-		uma.WithKeycloakClient(client), uma.WithKeycloakOwnerManagedAccess(),
+		testr.New(t),
+		uma.WithKeycloakClient(client),
+		uma.WithKeycloakOwnerManagedAccess(),
 	)
 	require.NoError(t, err)
 	return kp

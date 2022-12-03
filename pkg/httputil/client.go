@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/go-logr/logr"
 )
 
 type ClientCreds struct {
@@ -37,6 +39,7 @@ type Client struct {
 	Client        *http.Client
 	creds         *ClientCreds
 	Authenticator Authenticator
+	Logger        logr.Logger
 }
 
 func (c *Client) doRequest(req *http.Request) (resp *http.Response, err error) {
@@ -48,6 +51,7 @@ func (c *Client) doRequest(req *http.Request) (resp *http.Response, err error) {
 
 func (c *Client) DoRequest(req *http.Request) (resp *http.Response, err error) {
 	if c.creds == nil {
+		c.Logger.Info("credentials not found")
 		c.creds, err = c.Authenticator.Authenticate(c.Client)
 		if err != nil {
 			return nil, err
@@ -61,6 +65,7 @@ func (c *Client) DoRequest(req *http.Request) (resp *http.Response, err error) {
 	}
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		if c.creds.expired() {
+			c.Logger.Info("credentials expired")
 			c.creds, err = c.Authenticator.Authenticate(c.Client)
 			if err != nil {
 				return nil, err

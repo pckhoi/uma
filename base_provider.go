@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/go-logr/logr"
 	"github.com/pckhoi/uma/pkg/httputil"
 )
 
@@ -16,15 +17,17 @@ type baseProvider struct {
 	keySet       KeySet
 	discovery    DiscoveryDoc
 	client       *httputil.Client
+	logger       logr.Logger
 }
 
-func newBaseProvider(issuer, clientID, clientSecret string, keySet KeySet, client *httputil.Client) *baseProvider {
+func newBaseProvider(issuer, clientID, clientSecret string, keySet KeySet, client *httputil.Client, logger logr.Logger) *baseProvider {
 	p := &baseProvider{
 		issuer:       issuer,
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		keySet:       keySet,
 		client:       client,
+		logger:       logger,
 	}
 	return p
 }
@@ -55,6 +58,7 @@ func (p *baseProvider) VerifySignature(ctx context.Context, jwt string) (payload
 }
 
 func (p *baseProvider) Authenticate(client *http.Client) (*httputil.ClientCreds, error) {
+	p.logger.Info("authenticating client")
 	resp, err := p.client.PostFormUrlencoded(p.discovery.TokenEndpoint, nil, map[string][]string{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {p.clientID},

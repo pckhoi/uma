@@ -30,7 +30,7 @@ func (s mockResourceStore) Get(name string) (string, error) {
 	return id, nil
 }
 
-func createKeycloakProvider(vcrDir string) (*uma.KeycloakProvider, func() error) {
+func createKeycloakProvider(vcrDir string, logger logr.Logger) (*uma.KeycloakProvider, func() error) {
 	r, err := recorder.NewAsMode(filepath.Join(vcrDir, "test_server"), recorder.ModeReplaying, http.DefaultTransport)
 	if err != nil {
 		log.Fatal(err)
@@ -42,7 +42,9 @@ func createKeycloakProvider(vcrDir string) (*uma.KeycloakProvider, func() error)
 	kp, err := uma.NewKeycloakProvider(
 		issuer, "test-client", "change-me",
 		oidc.NewRemoteKeySet(oidc.ClientContext(context.Background(), client), issuer+"/protocol/openid-connect/certs"),
-		uma.WithKeycloakClient(client), uma.WithKeycloakOwnerManagedAccess(),
+		logger,
+		uma.WithKeycloakClient(client),
+		uma.WithKeycloakOwnerManagedAccess(),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +56,8 @@ func main() {
 	port := os.Args[1]
 	vcrDir := os.Args[2]
 	rs := make(mockResourceStore)
-	kp, stop := createKeycloakProvider(vcrDir)
+	logger := logr.Discard()
+	kp, stop := createKeycloakProvider(vcrDir, logger)
 	defer stop()
 	sm := http.NewServeMux()
 	man := UMAManager(uma.ManagerOptions{
@@ -73,7 +76,7 @@ func main() {
 		},
 		DisableTokenExpirationCheck:     true,
 		IncludeScopesInPermissionTicket: true,
-	}, logr.Discard())
+	}, logger)
 	sm.HandleFunc("/register-resources", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := kp.CreateResource(&uma.Resource{
 			ResourceType: uma.ResourceType{

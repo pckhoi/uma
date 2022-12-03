@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/pckhoi/uma/pkg/httputil"
 )
 
@@ -33,7 +34,7 @@ func WithKeycloakOwnerManagedAccess() KeycloakOption {
 	}
 }
 
-func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, opts ...KeycloakOption) (p *KeycloakProvider, err error) {
+func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, logger logr.Logger, opts ...KeycloakOption) (p *KeycloakProvider, err error) {
 	p = &KeycloakProvider{
 		_client:  http.DefaultClient,
 		ClientID: clientID,
@@ -41,10 +42,15 @@ func NewKeycloakProvider(issuer, clientID, clientSecret string, keySet KeySet, o
 	for _, opt := range opts {
 		opt(p)
 	}
+	logger = logger.WithValues(
+		"issuer", issuer,
+		"client_id", clientID,
+	)
 	p.baseProvider = newBaseProvider(issuer, clientID, clientSecret, keySet, &httputil.Client{
 		Client:        p._client,
 		Authenticator: p,
-	})
+		Logger:        logger,
+	}, logger)
 	if err := p.discover(); err != nil {
 		return nil, err
 	}
