@@ -25,13 +25,13 @@ func JSONRequest(method string, uri string, payload interface{}) (*http.Request,
 }
 
 func DecodeJSONResponse(resp *http.Response, obj interface{}) error {
+	if !strings.Contains(resp.Header.Get("Content-Type"), "application/json") || resp.StatusCode >= 300 {
+		return NewErrUnanticipatedResponse(resp)
+	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
-	}
-	if !strings.Contains(resp.Header.Get("Content-Type"), "application/json") || resp.StatusCode >= 300 {
-		return ErrUnanticipatedResponse(resp, body)
 	}
 	return json.Unmarshal(body, obj)
 }
@@ -40,29 +40,38 @@ func GetRedirectLocation(resp *http.Response) (loc *url.URL, err error) {
 	if resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusTemporaryRedirect {
 		return url.Parse(resp.Header.Get("Location"))
 	}
+	return nil, NewErrUnanticipatedResponse(resp)
+}
+
+type ErrUnanticipatedResponse struct {
+	Status      int
+	ContentType string
+	Body        string
+}
+
+func NewErrUnanticipatedResponse(resp *http.Response) *ErrUnanticipatedResponse {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return nil, ErrUnanticipatedResponse(resp, body)
+	return &ErrUnanticipatedResponse{
+		Status:      resp.StatusCode,
+		ContentType: resp.Header.Get("Content-Type"),
+		Body:        string(body),
+	}
 }
 
-func ErrUnanticipatedResponse(resp *http.Response, body []byte) error {
-	return fmt.Errorf(
+func (err ErrUnanticipatedResponse) Error() string {
+	return fmt.Sprintf(
 		"unanticipated response %d: (%s) %s",
-		resp.StatusCode, resp.Header.Get("Content-Type"), string(body),
+		err.Status, err.ContentType, err.Body,
 	)
 }
 
 func Ensure2XX(resp *http.Response) error {
 	if resp.StatusCode >= 300 {
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		return ErrUnanticipatedResponse(resp, body)
+		return NewErrUnanticipatedResponse(resp)
 	}
 	return nil
 }

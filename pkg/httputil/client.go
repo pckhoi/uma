@@ -3,7 +3,6 @@ package httputil
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -73,12 +72,7 @@ func (c *Client) DoRequest(req *http.Request) (resp *http.Response, err error) {
 			c.creds.setExpiresTime()
 			return c.doRequest(req)
 		} else {
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
-			}
-			return nil, ErrUnanticipatedResponse(resp, body)
+			return nil, NewErrUnanticipatedResponse(resp)
 		}
 	}
 	return resp, nil
