@@ -36,6 +36,22 @@ type Credentials struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
+func (kc *KeycloakClient) Authenticate() (*httputil.ClientCreds, error) {
+	resp, err := httputil.PostFormUrlencoded(kc.client, kc.oidc.Endpoint().TokenURL, nil, map[string][]string{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {kc.clientID},
+		"client_secret": {kc.clientSecret},
+	})
+	if err != nil {
+		return nil, err
+	}
+	creds := &httputil.ClientCreds{}
+	if err = httputil.DecodeJSONResponse(resp, creds); err != nil {
+		return nil, err
+	}
+	return creds, nil
+}
+
 func (kc *KeycloakClient) AuthenticateUserWithPassword(username, password string) (creds *Credentials, err error) {
 	params := map[string][]string{
 		"grant_type":    {"password"},
